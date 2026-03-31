@@ -45,6 +45,7 @@ from main import (
     IRPF_REDUCER_PHASE_OUT_LIMIT,
     IRPF_TABLE_2026,
     LEGAL_MINIMUM_WAGE,
+    MINIMUM_VIABLE_REVENUE_BRL,
     STATE_FILE,
 )
 from rich.prompt import InvalidResponse
@@ -265,11 +266,57 @@ class TestMinimumRevenueScenario(unittest.TestCase):
         """With very low revenue, dividends can be negative
         (Pró-labore + DAS > revenue)."""
         # R$ 500 gross - R$ 1621 pro-labore - DAS = negative
-        self.assertLess(self.results["available_dividends"], 0)
+        self.assertLess(float(self.results["available_dividends"]), 0)
 
     def test_irpf_zero_for_low_income(self) -> None:
         """IRPF should be zero for minimum wage Pró-labore."""
-        self.assertAlmostEqual(self.results["irpf_tax"], 0.0, places=2)
+        self.assertAlmostEqual(float(self.results["irpf_tax"]), 0.0, places=2)
+
+
+class TestZeroRevenueCompliance(unittest.TestCase):
+    """Test zero and near-zero revenue scenarios (Simples Nacional compliance)."""
+    
+    def test_minimum_viable_threshold_constant(self) -> None:
+        """Verify the constant mathematically matches the formula."""
+        expected = LEGAL_MINIMUM_WAGE + (LEGAL_MINIMUM_WAGE * DAS_TAX_RATE)
+        self.assertAlmostEqual(MINIMUM_VIABLE_REVENUE_BRL, expected, places=2)
+
+    def test_zero_revenue_flags(self) -> None:
+        """Exact zero revenue should set both tracking flags."""
+        results = calculate_taxes(revenue_usd=0.0, exchange_rate=5.00)
+        self.assertTrue(results["is_zero_revenue"])
+        self.assertTrue(results["is_below_viable_threshold"])
+
+    def test_near_zero_revenue_flags(self) -> None:
+        """Near-zero revenue should only set the threshold flag."""
+        results = calculate_taxes(revenue_usd=100.0, exchange_rate=5.00)
+        self.assertFalse(results["is_zero_revenue"])
+        self.assertTrue(results["is_below_viable_threshold"])
+
+    def test_normal_revenue_flags(self) -> None:
+        """Normal revenue should set neither flag."""
+        results = calculate_taxes(revenue_usd=5000.0, exchange_rate=5.00)
+        self.assertFalse(results["is_zero_revenue"])
+        self.assertFalse(results["is_below_viable_threshold"])
+
+    def test_zero_revenue_dividends_negative(self) -> None:
+        """Zero revenue forces negative dividends since the minimum Pró-labore + DAS represents a cost."""
+        results = calculate_taxes(revenue_usd=0.0, exchange_rate=5.00)
+        self.assertEqual(float(results["gross_revenue_brl"]), 0.0)
+        # Dividends = 0 - 1621.00 - 0 = -1621.00
+        self.assertAlmostEqual(float(results["available_dividends"]), -LEGAL_MINIMUM_WAGE, places=2)
+
+    def test_zero_revenue_inss_calculated(self) -> None:
+        """Even with zero revenue, INSS should nominally calculate based on minimum wage floor
+        to accurately reflect the tax burden of withdrawing a salary if the owner chooses to."""
+        results = calculate_taxes(revenue_usd=0.0, exchange_rate=5.00)
+        expected_inss = LEGAL_MINIMUM_WAGE * INSS_TAX_RATE
+        self.assertAlmostEqual(float(results["inss_tax"]), expected_inss, places=2)
+
+    def test_zero_revenue_das(self) -> None:
+        """DAS is strictly proportional to gross revenue and must be zero."""
+        results = calculate_taxes(revenue_usd=0.0, exchange_rate=5.00)
+        self.assertAlmostEqual(float(results["estimated_das"]), 0.0, places=2)
 
 
 # ── v3.0 IRPF 2026 Tests ────────────────────────────────────────

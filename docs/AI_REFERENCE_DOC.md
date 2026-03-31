@@ -170,4 +170,24 @@ _AI Agents: This section documents the IRPF (Individual Income Tax) calculation 
 
 ---
 
+## 8. Zero-Revenue & Low-Revenue Edge Cases (v3.1)
+
+_AI Agents: The codebase safely handles zero and near-zero revenue inputs without breaking the calculation engine. Understanding the edge cases is crucial for UI advisory messages._
+
+### Mathematical Handling
+
+- `MINIMUM_VIABLE_REVENUE_BRL` = `LEGAL_MINIMUM_WAGE + (LEGAL_MINIMUM_WAGE * DAS_TAX_RATE)` (approx. R$ 1.670,52).
+- When `Gross Revenue (BRL)` < `MINIMUM_VIABLE_REVENUE_BRL`: The company generates **negative dividends** because the cost of maintaining the minimum Pró-labore + DAS exceeds the revenue. The owner must inject capital to cover expenses.
+- Calculations naturally handle 0 revenue without division-by-zero errors because the `render_breakdown_bar` and `effective_tax_burden` implementations safely guard against `gross <= 0`. If revenue is exactly 0, `Pró-labore` defaults to the `LEGAL_MINIMUM_WAGE` floor.
+
+### Regulatory Advisory
+
+The codebase provides targeted guidance through the UI when revenue hits these thresholds:
+
+1. **Zero Revenue Check (`is_zero_revenue` flag):** Notifies the user that Pró-labore withdrawal is legally optional when genuinely inactive, but emphasizes that choosing not to pay it results in losing INSS coverage.
+2. **Low Revenue Check (`is_below_viable_threshold` flag):** Emphasizes that PGDAS-D filing remains mandatory despite low revenue.
+3. **SC/Florianópolis Municipal Fees:** Reminds users about the fixed annual `TFF (Taxa de Fiscalização de Funcionamento)` imposed by the municipality irrespective of revenue.
+
+---
+
 _(End of Document)_

@@ -42,7 +42,7 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 - 📊 **Visual revenue breakdown** — stacked bar chart showing salary/INSS/IRPF/DAS/dividends split
 - 🛡️ **Input validation** — rejects invalid dates, zero/negative numbers with clear error messages
 - 🔄 **Multi-scenario loop** — compare different months, revenues, or exchange rates without restarting
-- ⚠️ **Smart warnings** — Bracket 1 ceiling warning, negative dividends danger panel
+- ⚠️ **Smart warnings** — Bracket 1 ceiling warning, negative dividends danger panel with SC/Florianópolis zero-revenue compliance tracking
 - 📦 **Dividend calculation** — shows tax-free dividend distribution
 - 🏠 **Net take-home** — total after all deductions (INSS + IRPF) with effective tax burden %
 

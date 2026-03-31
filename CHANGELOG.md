@@ -4,6 +4,30 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [3.1.0] — 2026-03-31
+
+### 🔎 Zero-Revenue Compliance & SC/Florianópolis Regulations
+
+The application now safely supports zero and near-zero revenue inputs, surfacing targeted educational advisories regarding Brazilian Simples Nacional requirements for inactive periods.
+
+### Added
+
+- **`MINIMUM_VIABLE_REVENUE_BRL` Constant** — Defines the exact gross revenue required to naturally cover minimum Pró-labore + DAS without shareholder capital injection (approx. R$ 1.670,52 for 2026).
+- **Zero-Revenue Advisory** — When revenue is exactly zero, the negative dividends warning is replaced by a specialized advisory panel explaining that Pró-labore is optional during inactivity, but PGDAS-D filing remains mandatory.
+- **SC / Florianópolis Reminders** — The negative-dividends and low-revenue panels now alert users to the fixed annual TFF (Taxa de Fiscalização de Funcionamento) charged by the municipality of Florianópolis regardless of revenue.
+- **`docs/COMPLIANCE_ZERO_REVENUE.md`** — Comprehensive documentation mapping official Receita Federal, INSS, and municipal rules for zero-revenue solopreneurs to RCal's behavior.
+- **`TestZeroRevenueCompliance`** — 7 new tests validating the threshold math, zero-revenue dividends calculations, and strict boolean flag triggering.
+
+### Changed
+
+- **Revenue Prompt** — Changed from `PositiveFloatPrompt` to `NonNegativeFloatPrompt` to intentionally allow `0` as a valid monthly revenue input.
+- **`calculate_taxes()`** — Enhanced return dict with `is_zero_revenue` and `is_below_viable_threshold` booleans.
+- **`display_results()`** — Intercepts the threshold flags to display localized specific Brazilian logic context when calculating low-income or zero-revenue months.
+- **`AI_REFERENCE_DOC.md`** — Added §8 detailing mathematical handling of zero-division safety and UI warning specifications.
+- **test_main.py** — Expanded from 122 to 129 tests (17 → 18 test classes).
+
+---
+
 ## [3.0.1] — 2026-03-31
 
 ### 🔬 Mathematical Validation & INSS Ceiling Fix

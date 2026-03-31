@@ -212,6 +212,18 @@ Located in the user's home directory as a hidden file.
 The file is human-readable and can be manually edited or deleted.
 Use the in-app '[4] Clear Memory' option to wipe it cleanly."""
 
+MINIMUM_VIABLE_REVENUE_BRL: float = LEGAL_MINIMUM_WAGE + (LEGAL_MINIMUM_WAGE * DAS_TAX_RATE)
+"""Minimum monthly BRL revenue needed to cover minimum Pró-labore + DAS.
+
+Below this threshold (~R$ 1.670,52 for 2026), the company must inject
+capital to cover expenses — dividends will be negative."""
+
+FLORIPA_TFF_REFERENCE: str = (
+    "TFF (Taxa de Fiscalização de Funcionamento) — Florianópolis "
+    "municipal licensing fee. Fixed annual charge regardless of revenue."
+)
+"""Reference note about the Florianópolis municipal licensing fee."""
+
 
 # ──────────────────────────────────────────────────────────────────
 # State Persistence — Cross-Session Memory
@@ -661,7 +673,7 @@ def calculate_taxes(
     num_dependents: int = 0,
     pgbl_contribution: float = 0.0,
     alimony: float = 0.0,
-) -> dict[str, float | str | dict]:
+) -> dict[str, float | str | dict | bool]:
     """Calculate all tax components for a given monthly revenue.
 
     This function implements the Fator R optimization strategy and,
@@ -758,6 +770,9 @@ def calculate_taxes(
         (ideal_pro_labore - inss_tax - final_irpf) + available_dividends
     )
 
+    is_zero_revenue: bool = (gross_revenue_brl == 0.0)
+    is_below_viable_threshold: bool = gross_revenue_brl < MINIMUM_VIABLE_REVENUE_BRL
+
     return {
         "gross_revenue_brl": gross_revenue_brl,
         "fator_r_minimum": fator_r_minimum,
@@ -778,6 +793,8 @@ def calculate_taxes(
         "bracket_warning": bracket_warning,
         "available_dividends": available_dividends,
         "total_net_take_home": total_net_take_home,
+        "is_zero_revenue": is_zero_revenue,
+        "is_below_viable_threshold": is_below_viable_threshold,
     }
 
 
@@ -864,14 +881,14 @@ def collect_inputs(
     # Revenue: use saved default if available
     saved_revenue = saved.get("revenue_usd")
     if saved_revenue is not None and prev_exchange_rate is None:
-        revenue_usd: float = PositiveFloatPrompt.ask(
-            "[prompt.label]💵 Monthly Revenue in USD[/]",
+        revenue_usd: float = NonNegativeFloatPrompt.ask(
+            "[prompt.label]💵 Monthly Revenue in USD[/] [prompt.hint](0 = zero-revenue advisory)[/]",
             console=console,
             default=float(saved_revenue),
         )
     else:
-        revenue_usd = PositiveFloatPrompt.ask(
-            "[prompt.label]💵 Monthly Revenue in USD[/]",
+        revenue_usd = NonNegativeFloatPrompt.ask(
+            "[prompt.label]💵 Monthly Revenue in USD[/] [prompt.hint](0 = zero-revenue advisory)[/]",
             console=console,
         )
 
@@ -991,7 +1008,7 @@ def display_results(
     month_year: str,
     revenue_usd: float,
     exchange_rate: float,
-    results: dict[str, float | str],
+    results: dict[str, float | str | dict | bool],
 ) -> None:
     """Render calculation results in a 3-zone visual architecture.
 
@@ -1196,8 +1213,44 @@ def display_results(
             ("     Pró-labore is already at the legal minimum (", "label"),
             (format_brl(LEGAL_MINIMUM_WAGE), "money.highlight"),
             (").\n     The company must still cover DAS + INSS "
-             "from available funds.", "label"),
+             "from available funds.\n\n", "label"),
+            ("━━━ SC / Florianópolis Reminders ━━━\n\n", "status.warn"),
+            ("  📌 ", ""),
+            ("PGDAS-D filing", "heading"),
+            (" — Required every month, even with\n", "label"),
+            ("     low revenue. Declare the actual amount.\n\n", "label.dim"),
+            ("  📌 ", ""),
+            ("TFF (municipal fee)", "heading"),
+            (" — Florianópolis charges a fixed\n", "label"),
+            ("     annual licensing fee regardless of revenue.", "label.dim"),
         )
+        
+        if results.get("is_zero_revenue"):
+            warning_content = Text.assemble(
+                ("⚠️  Zero Revenue Advisory\n\n", "status.warn"),
+                ("Your company generated no revenue this month.\n\n", "label"),
+                ("━━━ Brazilian Legal Guidelines ━━━\n\n", "heading"),
+                ("  📌 ", ""),
+                ("Pró-labore is Optional", "status.warn"),
+                (" — If the company is genuinely\n", "label"),
+                ("     inactive, you do ", "label"),
+                ("not", "status.danger"),
+                (" have to withdraw Pró-labore.\n", "label"),
+                ("     (This means no INSS cost, but no coverage either).\n\n", "label.dim"),
+                ("  📌 ", ""),
+                ("DAS is Zero", "status.warn"),
+                (" — Your Simples Nacional tax is legally R$ 0,00.\n\n", "label"),
+                ("  📌 ", ""),
+                ("PGDAS-D Filing", "status.warn"),
+                (" — You ", "label"),
+                ("MUST", "status.danger"),
+                (" still file your monthly\n", "label"),
+                ("     declaration informing zero revenue to avoid fines.\n\n", "label"),
+                ("  📌 ", ""),
+                ("TFF (Florianópolis)", "status.warn"),
+                (" — Annual municipal licensing fee\n", "label"),
+                ("     must still be paid regardless of revenue.\n", "label.dim"),
+            )
 
         bottom_content = Group(
             bottom_table,
@@ -1464,8 +1517,8 @@ def main() -> None:
                     )
                 )
                 console.print()
-                revenue_usd = PositiveFloatPrompt.ask(
-                    "[prompt.label]💵 Monthly Revenue in USD[/]",
+                revenue_usd = NonNegativeFloatPrompt.ask(
+                    "[prompt.label]💵 Monthly Revenue in USD[/] [prompt.hint](0 = zero-revenue advisory)[/]",
                     console=console,
                 )
                 month_year = prev_month_year  # type: ignore[assignment]
