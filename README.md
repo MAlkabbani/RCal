@@ -5,6 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20M1%2FM2%2FM3-000000?logo=apple)
+![Rich](https://img.shields.io/badge/Rich-13.0+-00b4d8?logo=python&logoColor=white)
 
 ---
 
@@ -35,10 +36,13 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 
 - 🧮 **Automatic Fator R optimization** — calculates the ideal Pró-labore
 - 💱 **USD → BRL conversion** — built for service exporters
-- 📊 **Beautiful terminal output** — powered by the [Rich](https://github.com/Textualize/rich) library
-- ⚠️ **IRPF warning** — alerts when personal income tax withholding applies
+- 🎨 **Premium terminal UI** — branded ASCII header, 3-zone layout, themed colors via [Rich](https://github.com/Textualize/rich)
+- 📊 **Visual revenue breakdown** — stacked bar chart showing salary/taxes/dividends split
+- 🛡️ **Input validation** — rejects invalid dates, zero/negative numbers with clear error messages
+- 🔄 **Multi-scenario loop** — compare different months, revenues, or exchange rates without restarting
+- ⚠️ **Smart warnings** — IRPF alert, Bracket 1 ceiling warning, negative dividends danger panel
 - 📦 **Dividend calculation** — shows tax-free dividend distribution
-- 🏠 **Net take-home** — total after all deductions
+- 🏠 **Net take-home** — total after all deductions with effective tax burden %
 
 ---
 
@@ -84,51 +88,82 @@ pip install -r requirements.txt
 ### 4. Run the Calculator
 
 ```bash
-python main.py
+python3 main.py
+```
+
+### 5. Run Tests
+
+```bash
+python3 -m unittest test_main -v
 ```
 
 ---
 
 ## 💻 Usage Example
 
-When you run `python main.py`, the tool will interactively prompt you for:
+When you run the tool, it will interactively prompt you for:
 
-1. **Current Month/Year** — e.g., `03/2026`
+1. **Current Month/Year** — defaults to the current month (e.g., `03/2026`)
 2. **Monthly Revenue in USD** — e.g., `5000`
 3. **USD → BRL Exchange Rate** — e.g., `5.75`
 
 ### Sample Output
 
 ```
-╭─────────────────────────────────────╮
-│          RCal                       │
-│  Simples Nacional Tax Calculator    │
-╰─────────────────────────────────────╯
+  ██████╗   ██████╗  █████╗  ██╗
+  ██╔══██╗ ██╔════╝ ██╔══██╗ ██║
+  ██████╔╝ ██║      ███████║ ██║
+  ██╔══██╗ ██║      ██╔══██║ ██║
+  ██║  ██║ ╚██████╗ ██║  ██║ ███████╗
+  ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝
 
-📅 Current Month/Year (e.g. 03/2026): 03/2026
+          Simples Nacional Tax Calculator
+    Anexo III  ·  Fator R  ·  Export Exemptions
+
+────────────────────────────────────────────────
+
+📅 Current Month/Year (MM/YYYY) (03/2026): 03/2026
 💵 Monthly Revenue in USD: 5000
 💱 USD → BRL Exchange Rate: 5.75
 
-╭──── 📥 Input Parameters ────╮
-│  📅 Reference Month  03/2026        │
-│  💵 Revenue (USD)    US$ 5,000.00   │
-│  💱 Exchange Rate    1 USD = R$ 5.75│
-╰──────────────────────────────────────╯
+  ╭─── 📅 Month ───╮ ╭──── 💵 Revenue ────╮ ╭─── 💱 Rate ────╮
+  │    03/2026     │ │    US$ 5,000.00    │ │   R$ 5.7500    │
+  ╰────────────────╯ ╰────────────────────╯ ╰────────────────╯
 
-╭──── 📊 Tax Calculation Results ─────╮
-│ ╭──────────────────────┬────────────╮│
-│ │ Gross Revenue (BRL)  │ R$ 28.750  ││
-│ │ Fator R Min (28%)    │ R$ 8.050   ││
-│ │ ✨ Ideal Pró-labore  │ R$ 8.050   ││
-│ │ INSS (11%)           │-R$ 885,50  ││
-│ │ DAS (Simples)        │-R$ 878,03  ││
-│ │ IRPF Status          │⚠️ Triggered││
-│ │ 📦 Dividends         │R$ 19.821   ││
-│ │ 🏠 Net Take-Home     │R$ 26.986   ││
-│ ╰──────────────────────┴────────────╯│
-╰──────────────────────────────────────╯
+  ╭──────────────── 📊 Tax Breakdown ─────────────────╮
+  │ ┌──────────────────────┬──────────────────────────┐│
+  │ │ Gross Revenue (BRL)  │              R$ 28.750,00 ││
+  │ │ Fator R Min (28%)    │               R$ 8.050,00 ││
+  │ │ ✨ Ideal Pró-labore  │               R$ 8.050,00 ││
+  │ │ INSS (11%)           │              - R$ 885,50  ││
+  │ │ DAS (Simples)        │              - R$ 878,02  ││
+  │ │ IRPF Status          │   ⚠️ IRPF Triggered!      ││
+  │ │ 📈 Bracket Warning   │   ⚠️ Exceeds R$ 180k      ││
+  │ └──────────────────────┴──────────────────────────┘│
+  ╰────────────────────────────────────────────────────╯
+
+  ╭────────────── 💰 Your Bottom Line ──────────────╮
+  │  📦 Tax-Free Dividends         R$ 19.821,97     │
+  │  🏠 Net Take-Home              R$ 26.986,47     │
+  │  📉 Effective Tax Burden              6.1%      │
+  │                                                  │
+  │  Revenue Distribution                            │
+  │  ██████████████████████████████████████████████  │
+  │  █ Salary 25%  █ INSS 3%  █ DAS 3%  █ Yours 69% │
+  ╰──────────────────────────────────────────────────╯
+
+🔄 Calculate another month? [y/n] (y):
 ```
-*(Actual output includes colors and improved formatting)*
+*(Actual output includes full colors and theming)*
+
+### Loop Mode
+
+After each calculation, you can:
+- **[1] Change all inputs** — re-enter month, revenue, and rate (rate pre-filled)
+- **[2] Change only revenue** — keep current month and exchange rate
+- **[3] Change only exchange rate** — keep current month and revenue
+
+This makes comparing multiple scenarios effortless.
 
 ---
 
@@ -153,10 +188,11 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 
 ```
 RCal/
-├── main.py              # Main application script
-├── test_main.py         # Unit tests (Fator R validation)
-├── requirements.txt     # Python dependencies
+├── main.py              # Main application (UI + calculation engine)
+├── test_main.py         # Unit tests (18 tests, 4 test classes)
+├── requirements.txt     # Python dependencies (rich>=13.0.0)
 ├── README.md            # This file
+├── CHANGELOG.md         # Version history and changes
 ├── .gitignore           # Git ignore rules
 └── docs/
     ├── initial-prompt.md    # Original specification
@@ -173,6 +209,8 @@ Contributions are welcome! The codebase uses:
 - **Type hints** throughout for clarity
 - **Docstrings** explaining the Brazilian tax context
 - **Named constants** with explanatory comments
+- **Rich Theme** for consistent, customizable styling
+- **Custom Prompt subclasses** for input validation
 
 If you're unfamiliar with Brazilian tax law, the comments in `main.py` provide context for each calculation step.
 

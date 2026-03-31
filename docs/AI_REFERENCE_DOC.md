@@ -37,6 +37,8 @@ The core algorithm relies on this specific sequence of operations:
     - `INSS Due` = `Ideal Pró-labore` \* `0.11`
     - `DAS Due` = `Gross Revenue (BRL)` \* `0.03054`
 5.  **Profit Distribution:** `Tax-Free Dividends` = `Gross Revenue (BRL)` - `Ideal Pró-labore` - `DAS Due`
+6.  **Net Take-Home:** `(Ideal Pró-labore - INSS Due)` + `Tax-Free Dividends`
+7.  **Effective Tax Burden:** `(INSS Due + DAS Due)` / `Gross Revenue (BRL)`
 
 ---
 
@@ -47,6 +49,7 @@ When modifying the application, account for the following real-world complexitie
 - **Regional Minimum Wages:** States like Santa Catarina (SC) have regional minimum wages (e.g., R$ 2.106,00 for tech workers in Faixa 4 as of 2026). However, for the sole purpose of a business owner's _Pró-labore_ to contribute to INSS, the Federal Minimum Wage is the legally accepted floor. The application defaults to the Federal level to optimize tax savings.
 - **Payment Gateways:** Foreign income (e.g., via Stripe) must be calculated using the BRL exchange rate on the exact date the funds are made available or the invoice is issued, not the date of withdrawal to a Brazilian bank account.
 - **Bracket Scaling:** The current hardcoded DAS rate (~3.05%) assumes the user is in Bracket 1 of Anexo III (Gross annual revenue up to R$ 180.000,00). If the company exceeds this, the effective rate must be dynamically calculated using the Receita Federal's progressive formula `((RBT12 * Nominal Rate) - Deductible Amount) / RBT12`.
+- **Negative Dividends:** When monthly revenue is too low (below roughly R$ 1.636,27 BRL), the minimum Pró-labore + DAS will exceed gross revenue, resulting in negative dividends. This means the company must inject capital. The application surfaces an explicit warning panel with actionable options in this scenario.
 
 ---
 
@@ -59,6 +62,31 @@ Use this specific scenario to test the application's math engine during CI/CD pi
 - **Expected Pró-labore:** R$ 1.621,00 _(Because 28% of 4618.09 is 1293.06, which is below the minimum wage floor)._
 - **Expected INSS:** R$ 178,31
 - **Expected IRPF Status:** Tax Free
+
+---
+
+## 6. Application Architecture (v2.0)
+
+_AI Agents: When modifying the codebase, respect these architectural constraints._
+
+### Critical Invariants
+- The `calculate_taxes()` function signature and return dictionary shape **must not change** — 18 unit tests depend on it.
+- All visual styling uses semantic tokens from `RCAL_THEME`. Do not use inline color strings.
+- Input validation is handled by `MonthYearPrompt` and `PositiveFloatPrompt` subclasses.
+
+### UI Components
+| Function | Purpose |
+|----------|---------|
+| `display_header()` | ASCII logo + subtitle + rule separator |
+| `collect_inputs()` | Validated prompts with smart defaults and exchange rate memory |
+| `display_results()` | 3-zone output: input recap → tax breakdown → bottom line |
+| `display_footer()` | Rule-separated legal context sections |
+| `render_breakdown_bar()` | Proportional stacked bar chart (Unicode █) |
+| `prompt_next_action()` | Loop mode menu (all/revenue/rate) |
+
+### Dependencies
+- `rich>=13.0.0` — the **only** external dependency
+- Python standard library: `re`, `time`, `datetime`
 
 ---
 

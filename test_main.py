@@ -10,7 +10,16 @@ as part of CI/CD pipelines to catch regressions in tax logic.
 """
 
 import unittest
-from main import calculate_taxes, format_brl, LEGAL_MINIMUM_WAGE
+from main import (
+    calculate_taxes,
+    format_brl,
+    format_pct,
+    render_breakdown_bar,
+    MonthYearPrompt,
+    PositiveFloatPrompt,
+    LEGAL_MINIMUM_WAGE,
+)
+from rich.prompt import InvalidResponse
 
 
 class TestFormatBRL(unittest.TestCase):
@@ -32,9 +41,26 @@ class TestFormatBRL(unittest.TestCase):
         self.assertEqual(format_brl(1234567.89), "R$ 1.234.567,89")
 
 
+class TestFormatPct(unittest.TestCase):
+    """Test percentage formatting."""
+
+    def test_fator_r(self) -> None:
+        """Standard Fator R target should format as 28.0%."""
+        self.assertEqual(format_pct(0.28), "28.0%")
+
+    def test_zero(self) -> None:
+        self.assertEqual(format_pct(0.0), "0.0%")
+
+    def test_full(self) -> None:
+        self.assertEqual(format_pct(1.0), "100.0%")
+
+    def test_small_pct(self) -> None:
+        self.assertEqual(format_pct(0.03054), "3.1%")
+
+
 class TestCalculateTaxes(unittest.TestCase):
     """Test the core tax calculation engine.
-    
+
     Standard test case from AI_REFERENCE_DOC.md § 5:
         Input:  $883.00 USD, 5.23 exchange rate
         Expected:
@@ -147,6 +173,117 @@ class TestMinimumRevenueScenario(unittest.TestCase):
         (Pró-labore + DAS > revenue)."""
         # R$ 500 gross - R$ 1621 pro-labore - DAS = negative
         self.assertLess(self.results["available_dividends"], 0)
+
+
+# ── v2.0 UI/UX Component Tests ──────────────────────────────────
+
+
+class TestMonthYearPrompt(unittest.TestCase):
+    """Test the MonthYearPrompt input validation."""
+
+    def setUp(self) -> None:
+        self.prompt = MonthYearPrompt("test")
+
+    def test_valid_month_year(self) -> None:
+        """Standard MM/YYYY format should be accepted."""
+        self.assertEqual(self.prompt.process_response("03/2026"), "03/2026")
+
+    def test_valid_december(self) -> None:
+        """Month 12 should be accepted."""
+        self.assertEqual(self.prompt.process_response("12/2026"), "12/2026")
+
+    def test_valid_january(self) -> None:
+        """Month 01 should be accepted."""
+        self.assertEqual(self.prompt.process_response("01/2026"), "01/2026")
+
+    def test_invalid_format_no_slash(self) -> None:
+        """Missing slash should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("032026")
+
+    def test_invalid_format_wrong_separator(self) -> None:
+        """Dash separator should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("03-2026")
+
+    def test_invalid_month_zero(self) -> None:
+        """Month 00 should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("00/2026")
+
+    def test_invalid_month_thirteen(self) -> None:
+        """Month 13 should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("13/2026")
+
+    def test_whitespace_stripped(self) -> None:
+        """Leading/trailing whitespace should be stripped."""
+        self.assertEqual(
+            self.prompt.process_response("  03/2026  "), "03/2026"
+        )
+
+
+class TestPositiveFloatPrompt(unittest.TestCase):
+    """Test the PositiveFloatPrompt input validation."""
+
+    def setUp(self) -> None:
+        self.prompt = PositiveFloatPrompt("test")
+
+    def test_valid_positive_number(self) -> None:
+        """Positive float should be accepted."""
+        self.assertEqual(self.prompt.process_response("883.00"), 883.00)
+
+    def test_valid_integer_string(self) -> None:
+        """Integer string should be accepted as float."""
+        self.assertEqual(self.prompt.process_response("5000"), 5000.0)
+
+    def test_reject_zero(self) -> None:
+        """Zero should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("0")
+
+    def test_reject_negative(self) -> None:
+        """Negative numbers should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("-100")
+
+    def test_reject_text(self) -> None:
+        """Non-numeric text should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("abc")
+
+    def test_reject_empty(self) -> None:
+        """Empty string should be rejected."""
+        with self.assertRaises(InvalidResponse):
+            self.prompt.process_response("")
+
+
+class TestBreakdownBar(unittest.TestCase):
+    """Test the revenue distribution breakdown bar."""
+
+    def test_normal_scenario_contains_yours(self) -> None:
+        """Normal scenario should show 'Yours' segment."""
+        results = calculate_taxes(revenue_usd=883.00, exchange_rate=5.23)
+        bar = render_breakdown_bar(results)
+        self.assertIn("Yours", bar.plain)
+
+    def test_negative_dividends_no_yours(self) -> None:
+        """Negative dividends scenario should not show 'Yours' segment."""
+        results = calculate_taxes(revenue_usd=100.00, exchange_rate=5.00)
+        bar = render_breakdown_bar(results)
+        self.assertNotIn("Yours", bar.plain)
+        self.assertIn("of costs", bar.plain)
+
+    def test_zero_revenue_message(self) -> None:
+        """Zero revenue should show informational message."""
+        results = {
+            "gross_revenue_brl": 0.0,
+            "ideal_pro_labore": 0.0,
+            "inss_tax": 0.0,
+            "estimated_das": 0.0,
+        }
+        bar = render_breakdown_bar(results)
+        self.assertIn("No revenue", bar.plain)
 
 
 if __name__ == "__main__":

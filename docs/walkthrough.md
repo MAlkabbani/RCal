@@ -1,38 +1,93 @@
-# 🚶 Walkthrough - RCal: Brazilian Simples Nacional Tax Calculator
+# 🚶 Walkthrough — RCal: Brazilian Simples Nacional Tax Calculator
 
-I have built a standalone Python CLI application to calculate the optimal **Pró-labore** and taxes for a Brazilian tech company exporting services under the Simples Nacional (Anexo III) regime and the **Fator R** rule.
+## 🚀 Project Overview
 
-## 🚀 Accomplishments
+RCal is a standalone Python CLI application that calculates the optimal **Pró-labore** and taxes for a Brazilian tech company exporting services under the Simples Nacional (Anexo III) regime using the **Fator R** rule.
 
-- **Interactive Python CLI**: A user-friendly tool developed using the `rich` library for high-quality terminal output.
-- **Fator R Optimization Logic**: Implemented calculations that automatically suggest the minimum administrator salary (Pró-labore) to minimize taxes (ensuring the 28% payroll-to-revenue ratio).
-- **Internationalization Ready**: Converts USD to BRL and formats all currency values in the standard Brazilian format (e.g., `R$ 1.621,00`).
-- **Complete Documentation**: A comprehensive `README.md` explaining the "Fator R" rule, installation for macOS Silicon (M1/M2/M3), and usage examples.
-- **GitHub Ready**: Initialized Git, added a `.gitignore`, committed the codebase, and pushed it to the repository.
+## 📦 Version History
 
-## 🛠️ Implementation Details
+### v2.0 — UI/UX Enhancement (March 2026)
 
-### 📂 File Structure
-- `main.py`: The core application containing the calculation logic and the `rich`-based UI.
-- `requirements.txt`: Lists the `rich` dependency.
-- `README.md`: Detailed documentation for users and contributors.
-- `.gitignore`: Excludes environment files and caches.
+A complete overhaul of the terminal experience, transforming RCal from a single-run calculator into a premium interactive tool.
 
-### 🧪 Features & Logic
-- **Automatic Pró-labore calculation**: Finds the maximum between the legal minimum wage and the 28% "Fator R" threshold.
-- **Tax Breakdown**: Calculates DAS (3.054%), INSS (11%), and provides an IRPF warning if the Pró-labore exceeds R$ 5.000,00.
-- **Dividends & Take-Home**: Shows the final net value distributed as tax-free dividends.
+#### 🎨 Design System
+- Introduced `RCAL_THEME` using Rich's `Theme` class with 15 semantic color tokens
+- All styles centralized in one location for easy palette customization
+- Categories: brand, money, text hierarchy, status, surfaces, prompts
 
-## 📸 Final Verification
+#### ✨ Enhanced Header
+- Visually attractive ASCII art logo rendered in brand color
+- Centered subtitle with application description
+- Decorative Rule separator
 
-A full test run with a USD revenue of $5,000 and a 5.75 exchange rate was performed:
-- **Gross Revenue**: R$ 28.750,00
-- **Fator R Minimum**: R$ 8.050,00
-- **DAS Tax**: R$ 878,02 (estimated)
-- **Total Net Take-Home**: R$ 26.986,47
+#### 🛡️ Input Validation
+- **MonthYearPrompt**: Custom `Prompt` subclass validating `MM/YYYY` format and month range (01-12)
+- **PositiveFloatPrompt**: Custom `FloatPrompt` subclass rejecting zero and negative numbers
+- Smart default: month/year auto-populated from system clock
+- Exchange rate remembered across loop iterations
 
-### 📦 Repository Status
-All files have been pushed to: `https://github.com/MAlkabbani/RCal.git`
+#### 📊 3-Zone Visual Output
+1. **Zone 1 — Input Recap**: Three compact horizontal card panels
+2. **Zone 2 — Tax Breakdown**: Structured table with semantic themed styles
+3. **Zone 3 — Bottom Line**: Highlighted panel with dividends, net take-home, effective tax burden %, and a stacked Unicode bar chart (█) showing revenue distribution
+
+#### 🔄 Stateful Loop Mode
+- "Calculate another month?" prompt after each result
+- Three options: [1] All inputs, [2] Only revenue, [3] Only exchange rate
+- Exchange rate pre-filled from previous run
+- Keeps previously entered values for unchanged fields
+
+#### ⚠️ Error Handling
+- **Ctrl+C**: Graceful exit with "👋 Até logo!" message (no Python traceback)
+- **Negative dividends**: Explicit danger panel explaining the problem with two actionable options
+- **Breakdown bar edge case**: Normalizes to total costs when expenses exceed revenue
+- **Rich tracebacks**: `install_rich_traceback(show_locals=True)` for unexpected errors
+
+#### 📝 Footer Refinement
+- Three Rule-separated sections replacing the original dense text block
+- 💡 Strategy, 💱 Exchange Rate, ⚖️ Disclaimer — each visually distinct but subdued
+
+### v1.0 — Initial Release
+
+- Interactive Python CLI using the `rich` library
+- Fator R optimization logic (28% threshold)
+- USD → BRL conversion with Brazilian currency formatting
+- DAS (3.054%), INSS (11%), IRPF warning, dividends, and net take-home
+- Comprehensive README with tax context documentation
+- Unit test suite with 18 tests across 4 scenarios
+
+## 🛠️ Architecture
+
+### File Structure
+- `main.py`: Application entry point containing UI layer + calculation engine
+- `test_main.py`: Unit test suite (18 tests, 4 test classes)
+- `requirements.txt`: Single dependency — `rich>=13.0.0`
+- `CHANGELOG.md`: Version history
+- `docs/AI_REFERENCE_DOC.md`: Canonical source of truth for business logic
+- `docs/initial-prompt.md`: Original project specification
+
+### Design Principles
+- **Single file**: All code in `main.py` for maximum simplicity
+- **No new dependencies**: Everything uses `rich>=13.0.0`
+- **Stable API**: `calculate_taxes()` function signature and return dict unchanged across versions
+- **Separation of concerns**: Calculation logic (`calculate_taxes()`) is fully separate from UI (`display_*` functions)
+
+## 📸 Verification
+
+### Automated Tests (18/18 passing)
+```bash
+python3 -m unittest test_main -v
+```
+
+### Manual Test Scenarios
+| Scenario | Revenue | Rate | Validates |
+|----------|---------|------|-----------|
+| Standard (§5) | $883 | 5.23 | Normal output, minimum wage floor, tax-free IRPF |
+| High Revenue | $5,000 | 5.75 | IRPF warning, bracket warning, Fator R > min wage |
+| Low Revenue | $100 | 5.00 | Negative dividends danger panel, bar normalization |
+
+### Repository
+All files pushed to: `https://github.com/MAlkabbani/RCal.git`
 Branch: `main`
 
 > [!TIP]
@@ -40,5 +95,5 @@ Branch: `main`
 > ```bash
 > python3 -m venv .venv && source .venv/bin/activate
 > pip install -r requirements.txt
-> python main.py
+> python3 main.py
 > ```
