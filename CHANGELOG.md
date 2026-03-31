@@ -4,6 +4,41 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [3.0.1] — 2026-03-31
+
+### 🔬 Mathematical Validation & INSS Ceiling Fix
+
+Comprehensive mathematical audit against official Brazilian government sources (Receita Federal, Lei nº 15.270/2025, LC 123/2006). All 9 tax constants and 5 IRPF brackets confirmed correct. One critical regulatory bug fixed.
+
+### Fixed
+
+- **INSS Ceiling (Teto Previdenciário)** — INSS contribution is now correctly capped at the 2026 ceiling of R$ 8.475,55. The maximum monthly INSS is R$ 932,31 (11% × R$ 8.475,55), regardless of how high the Pró-labore is. Previously, INSS was calculated as an uncapped 11% of Pró-labore, producing incorrect results for users with monthly BRL revenue above ~R$ 30.270.
+- **Display label** — The INSS row in the tax breakdown table now shows "INSS (11%, capped)" when the ceiling is active.
+
+### Added
+
+- **`INSS_CEILING` Constant** — R$ 8.475,55 with docstring citing Portaria Interministerial MPS/MF 2026.
+- **NaN/Infinity Input Guards** — `PositiveFloatPrompt` and `NonNegativeFloatPrompt` now reject `NaN`, `Infinity`, and `-Infinity` via `math.isfinite()` checks, preventing nonsensical calculations from non-finite float inputs.
+- **`TestINSSCeiling`** — 8 tests validating ceiling behavior: below/at/above boundary, cascading effects on taxable base, IRPF, net take-home, and deductions dictionary.
+- **`TestDASRateDerivation`** — 3 tests independently deriving the 3.054% DAS rate from Anexo III repartition percentages (IRPJ 4% + CSLL 3.5% + CPP 43.4% = 50.9% of 6% nominal rate).
+- **`TestInputGuardsNaNInfinity`** — 9 tests for NaN/Infinity/−Infinity rejection on both float prompt classes.
+- **`TestEdgeCases`** — 10 tests covering extreme revenues ($1–$50k), boundary conditions (exact minimum wage threshold, PGBL at exactly 12% cap), and effective tax burden identity.
+
+### Changed
+
+- **`calculate_taxes()`** — INSS now uses `min(ideal_pro_labore, INSS_CEILING)` as the contribution base.
+- **test_main.py** — Expanded from 92 to 122 tests (13 → 17 test classes).
+- **AI_REFERENCE_DOC.md** — Added INSS ceiling to §2 constants table, updated test count to 122/17, added `math.isfinite()` note to critical invariants.
+- **README.md** — Added `INSS_CEILING` to constants table, updated test count.
+
+### Technical
+
+- **New import** — `math` (stdlib) for `math.isfinite()` guard
+- **No new dependencies** — all changes use Python stdlib + `rich>=13.0.0`
+- **Backward compatible** — `calculate_taxes()` API unchanged; existing callers unaffected
+
+---
+
 ## [3.0.0] — 2026-03-31
 
 ### 🧮 Full 2026 IRPF Calculation Engine (Lei nº 15.270/2025)

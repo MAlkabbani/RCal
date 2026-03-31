@@ -36,6 +36,10 @@ from main import (
     NonNegativeFloatPrompt,
     NonNegativeIntPrompt,
     PositiveFloatPrompt,
+    DAS_TAX_RATE,
+    FATOR_R_TARGET,
+    INSS_CEILING,
+    INSS_TAX_RATE,
     IRPF_DEPENDENT_DEDUCTION,
     IRPF_REDUCER_FULL_EXEMPTION_LIMIT,
     IRPF_REDUCER_PHASE_OUT_LIMIT,
@@ -836,6 +840,387 @@ class TestStatePersistence(unittest.TestCase):
         self.assertEqual(state["num_dependents"], 0)
         self.assertAlmostEqual(state["pgbl_contribution"], 0.0)
         self.assertAlmostEqual(state["alimony"], 0.0)
+
+
+# ── v3.0.1 Mathematical Validation Tests ─────────────────────────
+
+
+class TestINSSCeiling(unittest.TestCase):
+    """Test the INSS contribution ceiling (teto previdenciário).
+
+    In 2026, the INSS contribution base is capped at R$ 8.475,55.
+    The maximum monthly INSS is R$ 932,31 (11% × R$ 8.475,55).
+
+    The ceiling triggers when Pró-labore > R$ 8.475,55, which occurs
+    when gross BRL revenue > R$ 8.475,55 / 0.28 = R$ 30.269,82.
+    """
+
+    def test_below_ceiling_unchanged(self) -> None:
+        """Pró-labore below ceiling → INSS = 11% of full Pró-labore.
+
+        $5000 × 5.75 = R$ 28.750 → Pró-labore R$ 8.050 < ceiling.
+        INSS = 8050 × 0.11 = R$ 885,50.
+        """
+        results = calculate_taxes(revenue_usd=5000.00, exchange_rate=5.75)
+        expected_inss = 8050.00 * INSS_TAX_RATE
+        self.assertAlmostEqual(results["inss_tax"], expected_inss, places=2)
+
+    def test_at_ceiling_boundary(self) -> None:
+        """Pró-labore at exactly the ceiling → INSS = ceiling × 11%.
+
+        Gross needed for Pró-labore = R$ 8.475,55:
+        8475.55 / 0.28 = R$ 30.269,82 → at rate 1.0: $30269.82.
+        """
+        # Use exchange rate = 1.0 for easy math
+        target_gross = INSS_CEILING / FATOR_R_TARGET
+        results = calculate_taxes(
+            revenue_usd=target_gross, exchange_rate=1.0
+        )
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], INSS_CEILING, places=2
+        )
+        expected_inss = INSS_CEILING * INSS_TAX_RATE
+        self.assertAlmostEqual(results["inss_tax"], expected_inss, places=2)
+
+    def test_above_ceiling_capped(self) -> None:
+        """Pró-labore above ceiling → INSS capped at R$ 932,31.
+
+        $5500 × 5.75 = R$ 31.625 → Pró-labore R$ 8.855 > ceiling.
+        INSS should be min(8855, 8475.55) × 0.11 = 8475.55 × 0.11 = 932.31.
+        NOT 8855 × 0.11 = 974.05.
+        """
+        results = calculate_taxes(revenue_usd=5500.00, exchange_rate=5.75)
+        expected_pro_labore = 5500.00 * 5.75 * FATOR_R_TARGET
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], expected_pro_labore, places=2
+        )
+        max_inss = INSS_CEILING * INSS_TAX_RATE
+        self.assertAlmostEqual(results["inss_tax"], max_inss, places=2)
+        # Must NOT equal the uncapped value
+        uncapped = expected_pro_labore * INSS_TAX_RATE
+        self.assertNotAlmostEqual(results["inss_tax"], uncapped, places=2)
+
+    def test_very_high_revenue_still_capped(self) -> None:
+        """$10,000 × 6.00 = R$ 60,000 → Pró-labore R$ 16.800.
+        INSS must still be capped at R$ 932,31."""
+        results = calculate_taxes(revenue_usd=10000.00, exchange_rate=6.00)
+        max_inss = INSS_CEILING * INSS_TAX_RATE
+        self.assertAlmostEqual(results["inss_tax"], max_inss, places=2)
+
+    def test_ceiling_affects_taxable_base(self) -> None:
+        """Capped INSS produces a higher taxable base → higher IRPF.
+
+        Without ceiling: taxable_base = 8855 - 974.05 = 7880.95
+        With ceiling:    taxable_base = 8855 - 932.31 = 7922.69
+
+        The capped scenario should have a higher taxable base.
+        """
+        results = calculate_taxes(revenue_usd=5500.00, exchange_rate=5.75)
+        pro_labore = results["ideal_pro_labore"]  # 8855.00
+        inss = results["inss_tax"]  # 932.31 (capped)
+        expected_base = pro_labore - inss
+        self.assertAlmostEqual(
+            results["taxable_base"], expected_base, places=2
+        )
+        # Verify the taxable base is higher than it would be without ceiling
+        uncapped_base = pro_labore - (pro_labore * INSS_TAX_RATE)
+        self.assertGreater(results["taxable_base"], uncapped_base)
+
+    def test_ceiling_cascades_to_net_take_home(self) -> None:
+        """The net take-home identity must hold with capped INSS.
+
+        Net = (Pró-labore - INSS_capped - IRPF) + Dividends.
+        """
+        results = calculate_taxes(revenue_usd=5500.00, exchange_rate=5.75)
+        expected = (
+            results["ideal_pro_labore"]
+            - results["inss_tax"]
+            - results["irpf_tax"]
+            + results["available_dividends"]
+        )
+        self.assertAlmostEqual(
+            results["total_net_take_home"], expected, places=2
+        )
+
+    def test_ceiling_irpf_correct_value(self) -> None:
+        """Verify exact IRPF for the above-ceiling scenario.
+
+        Pró-labore: R$ 8.855,00.  INSS (capped): R$ 932,31.
+        Taxable base: 8855 - 932.31 = 7922.69.
+        Bracket: 27.5% → Standard = 7922.69 × 0.275 - 908.73 = 1270.01.
+        Reducer: none (7922.69 > 7350) → Final IRPF = 1270.01.
+        """
+        results = calculate_taxes(revenue_usd=5500.00, exchange_rate=5.75)
+        self.assertAlmostEqual(
+            results["irpf_tax"], 1270.01, places=1
+        )
+
+    def test_inss_deductions_dict_reflects_cap(self) -> None:
+        """The irpf_deductions.inss value should use the capped amount."""
+        results = calculate_taxes(revenue_usd=5500.00, exchange_rate=5.75)
+        max_inss = INSS_CEILING * INSS_TAX_RATE
+        self.assertAlmostEqual(
+            results["irpf_deductions"]["inss"], max_inss, places=2
+        )
+
+
+class TestDASRateDerivation(unittest.TestCase):
+    """Verify the DAS_TAX_RATE constant derivation is mathematically correct.
+
+    Anexo III, Bracket 1 (up to R$ 180k/year):
+        Nominal rate: 6.00%
+        Repartition: IRPJ 4% + CSLL 3.5% + COFINS 12.82% + PIS 2.78%
+                     + CPP 43.4% + ISS 33.5% = 100%
+
+    Export exemptions remove ISS (33.5%), PIS (2.78%), COFINS (12.82%):
+        Remaining = IRPJ + CSLL + CPP = 4% + 3.5% + 43.4% = 50.9%
+        Effective = 6% × 50.9% = 3.054%
+    """
+
+    def test_das_rate_value(self) -> None:
+        """DAS_TAX_RATE constant must equal 3.054%."""
+        self.assertAlmostEqual(DAS_TAX_RATE, 0.03054, places=5)
+
+    def test_das_rate_derivation(self) -> None:
+        """Independently derive the DAS rate from first principles."""
+        nominal_rate = 0.06
+
+        # Repartition percentages (must sum to 100)
+        irpj = 4.00
+        csll = 3.50
+        cofins = 12.82
+        pis = 2.78
+        cpp = 43.40
+        iss = 33.50
+        total = irpj + csll + cofins + pis + cpp + iss
+        self.assertAlmostEqual(total, 100.00, places=2)
+
+        # Export-exempt: ISS + PIS + COFINS
+        remaining_pct = (irpj + csll + cpp) / 100.0
+        derived_rate = nominal_rate * remaining_pct
+
+        self.assertAlmostEqual(derived_rate, DAS_TAX_RATE, places=5)
+
+    def test_das_applied_correctly(self) -> None:
+        """DAS = gross_revenue × DAS_TAX_RATE."""
+        results = calculate_taxes(revenue_usd=883.00, exchange_rate=5.23)
+        expected_das = 883.00 * 5.23 * DAS_TAX_RATE
+        self.assertAlmostEqual(
+            results["estimated_das"], expected_das, places=2
+        )
+
+
+class TestInputGuardsNaNInfinity(unittest.TestCase):
+    """Test that NaN and Infinity values are rejected by float prompts.
+
+    Python's float('nan') and float('inf') pass the basic float()
+    conversion but would produce nonsensical tax calculations.
+    The math.isfinite() guard catches these at the input boundary.
+    """
+
+    def setUp(self) -> None:
+        self.pos_prompt = PositiveFloatPrompt("test")
+        self.nn_prompt = NonNegativeFloatPrompt("test")
+
+    # ── PositiveFloatPrompt ──────────────────────────────────────
+
+    def test_positive_rejects_nan(self) -> None:
+        """NaN should be rejected by PositiveFloatPrompt."""
+        with self.assertRaises(InvalidResponse):
+            self.pos_prompt.process_response("nan")
+
+    def test_positive_rejects_inf(self) -> None:
+        """Infinity should be rejected by PositiveFloatPrompt."""
+        with self.assertRaises(InvalidResponse):
+            self.pos_prompt.process_response("inf")
+
+    def test_positive_rejects_negative_inf(self) -> None:
+        """-Infinity should be rejected by PositiveFloatPrompt."""
+        with self.assertRaises(InvalidResponse):
+            self.pos_prompt.process_response("-inf")
+
+    def test_positive_accepts_normal_float(self) -> None:
+        """Normal positive floats should still be accepted."""
+        self.assertEqual(self.pos_prompt.process_response("5.75"), 5.75)
+
+    # ── NonNegativeFloatPrompt ───────────────────────────────────
+
+    def test_nonneg_rejects_nan(self) -> None:
+        """NaN should be rejected by NonNegativeFloatPrompt."""
+        with self.assertRaises(InvalidResponse):
+            self.nn_prompt.process_response("nan")
+
+    def test_nonneg_rejects_inf(self) -> None:
+        """Infinity should be rejected by NonNegativeFloatPrompt."""
+        with self.assertRaises(InvalidResponse):
+            self.nn_prompt.process_response("inf")
+
+    def test_nonneg_rejects_negative_inf(self) -> None:
+        """-Infinity should be rejected by NonNegativeFloatPrompt."""
+        with self.assertRaises(InvalidResponse):
+            self.nn_prompt.process_response("-inf")
+
+    def test_nonneg_accepts_zero(self) -> None:
+        """Zero should still be accepted."""
+        self.assertEqual(self.nn_prompt.process_response("0"), 0.0)
+
+    def test_nonneg_accepts_normal_float(self) -> None:
+        """Normal positive floats should still be accepted."""
+        self.assertEqual(self.nn_prompt.process_response("500.50"), 500.50)
+
+
+class TestEdgeCases(unittest.TestCase):
+    """Additional edge cases discovered during the mathematical audit.
+
+    These tests cover extreme input ranges, boundary conditions,
+    and scenarios that could expose floating-point or logic issues.
+    """
+
+    def test_exact_minimum_wage_threshold(self) -> None:
+        """Revenue where Fator R minimum exactly equals minimum wage.
+
+        Gross = 1621 / 0.28 = 5789.2857... BRL.
+        At this threshold, Pró-labore should equal the minimum wage.
+        """
+        threshold_gross = LEGAL_MINIMUM_WAGE / FATOR_R_TARGET
+        results = calculate_taxes(
+            revenue_usd=threshold_gross, exchange_rate=1.0
+        )
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], LEGAL_MINIMUM_WAGE, places=2
+        )
+
+    def test_just_above_fator_r_threshold(self) -> None:
+        """Revenue slightly above the Fator R = minimum wage boundary.
+
+        When gross is high enough that 28% > minimum wage, Pró-labore
+        should be exactly 28% of gross (not minimum wage).
+        """
+        gross_brl = LEGAL_MINIMUM_WAGE / FATOR_R_TARGET + 100.0
+        results = calculate_taxes(
+            revenue_usd=gross_brl, exchange_rate=1.0
+        )
+        expected = gross_brl * FATOR_R_TARGET
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], expected, places=2
+        )
+        self.assertGreater(
+            results["ideal_pro_labore"], LEGAL_MINIMUM_WAGE
+        )
+
+    def test_very_high_revenue_extreme(self) -> None:
+        """$50,000 × 6.0 = R$ 300,000 — extreme scenario.
+
+        Pró-labore: R$ 84,000. INSS: capped at R$ 932,31.
+        Should not crash or produce incorrect signs.
+        """
+        results = calculate_taxes(revenue_usd=50000.00, exchange_rate=6.00)
+        # Sanity checks
+        self.assertGreater(results["gross_revenue_brl"], 0)
+        self.assertGreater(results["ideal_pro_labore"], 0)
+        self.assertGreater(results["available_dividends"], 0)
+        self.assertGreater(results["total_net_take_home"], 0)
+        # INSS must be capped
+        max_inss = INSS_CEILING * INSS_TAX_RATE
+        self.assertAlmostEqual(results["inss_tax"], max_inss, places=2)
+
+    def test_all_deductions_maxed(self) -> None:
+        """All deductions at extreme values — taxable base should floor at 0.
+
+        10 dependents + huge PGBL + huge alimony on a low income.
+        """
+        results = calculate_taxes(
+            revenue_usd=883.00,
+            exchange_rate=5.23,
+            num_dependents=10,
+            pgbl_contribution=99999.00,
+            alimony=99999.00,
+        )
+        self.assertEqual(results["taxable_base"], 0.0)
+        self.assertAlmostEqual(results["irpf_tax"], 0.0, places=2)
+
+    def test_pgbl_exactly_at_12_percent_cap(self) -> None:
+        """PGBL contribution at exactly 12% of Pró-labore.
+
+        $5000 × 5.75 → Pró-labore R$ 8.050.
+        12% of 8050 = 966.00. PGBL = 966.00 → should be accepted fully.
+        """
+        results = calculate_taxes(
+            revenue_usd=5000.00,
+            exchange_rate=5.75,
+            pgbl_contribution=966.00,
+        )
+        self.assertAlmostEqual(
+            results["irpf_deductions"]["pgbl"], 966.00, places=2
+        )
+
+    def test_pgbl_one_cent_above_cap(self) -> None:
+        """PGBL at 12% of Pró-labore + R$ 0.01 → must be capped.
+
+        12% of 8050 = 966.00. PGBL = 966.01 → should cap at 966.00.
+        """
+        results = calculate_taxes(
+            revenue_usd=5000.00,
+            exchange_rate=5.75,
+            pgbl_contribution=966.01,
+        )
+        self.assertAlmostEqual(
+            results["irpf_deductions"]["pgbl"], 966.00, places=2
+        )
+
+    def test_effective_tax_burden_identity(self) -> None:
+        """Effective tax burden = (INSS + DAS + IRPF) / Gross.
+
+        This identity must hold for any revenue scenario.
+        """
+        for rev, rate in [(883, 5.23), (5000, 5.75), (5500, 5.75), (100, 5.0)]:
+            results = calculate_taxes(revenue_usd=rev, exchange_rate=rate)
+            gross = results["gross_revenue_brl"]
+            if gross > 0:
+                total_taxes = (
+                    results["inss_tax"]
+                    + results["estimated_das"]
+                    + results["irpf_tax"]
+                )
+                burden = total_taxes / gross
+                # Just verify it's a valid percentage (0% to 100%)
+                self.assertGreaterEqual(burden, 0.0)
+                self.assertLessEqual(burden, 1.0)
+
+    def test_one_dollar_revenue(self) -> None:
+        """Edge case: $1.00 revenue → extreme negative dividends.
+
+        Must not crash. Pró-labore = minimum wage, dividends deeply negative.
+        """
+        results = calculate_taxes(revenue_usd=1.00, exchange_rate=5.00)
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], LEGAL_MINIMUM_WAGE, places=2
+        )
+        self.assertLess(results["available_dividends"], 0)
+
+    def test_exchange_rate_very_small(self) -> None:
+        """Small exchange rate (0.01) → very low BRL revenue.
+
+        $100 × 0.01 = R$ 1.00. Pró-labore = minimum wage.
+        """
+        results = calculate_taxes(revenue_usd=100.00, exchange_rate=0.01)
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], LEGAL_MINIMUM_WAGE, places=2
+        )
+
+    def test_exchange_rate_very_large(self) -> None:
+        """Large exchange rate (100.0) → very high BRL revenue.
+
+        $1000 × 100 = R$ 100,000. Pró-labore = R$ 28,000.
+        INSS must be capped. Should not crash.
+        """
+        results = calculate_taxes(revenue_usd=1000.00, exchange_rate=100.0)
+        expected_pro_labore = 1000.00 * 100.0 * FATOR_R_TARGET
+        self.assertAlmostEqual(
+            results["ideal_pro_labore"], expected_pro_labore, places=2
+        )
+        max_inss = INSS_CEILING * INSS_TAX_RATE
+        self.assertAlmostEqual(results["inss_tax"], max_inss, places=2)
 
 
 if __name__ == "__main__":

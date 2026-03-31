@@ -55,6 +55,7 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 | `LEGAL_MINIMUM_WAGE` | R$ 1.621,00 | Federal minimum wage |
 | `DAS_TAX_RATE` | 3,054% | Simples Nacional (Anexo III, 1st bracket) |
 | `INSS_TAX_RATE` | 11% | Social security contribution |
+| `INSS_CEILING` | R$ 8.475,55 | INSS contribution ceiling (teto previdenciário) |
 | `FATOR_R_TARGET` | 28% | Minimum payroll-to-revenue ratio |
 | `IRPF_TABLE_2026` | 5 brackets | Progressive table: Isento / 7.5% / 15% / 22.5% / 27.5% |
 | `IRPF_DEPENDENT_DEDUCTION` | R$ 189,59 | Monthly IRPF deduction per dependent |
@@ -213,7 +214,7 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 RCal/
 ├── rcal                 # One-command launcher (bash)
 ├── main.py              # Main application (UI + calculation engine)
-├── test_main.py         # Unit tests (92 tests, 13 test classes)
+├── test_main.py         # Unit tests (122 tests, 17 test classes)
 ├── requirements.txt     # Python dependencies (rich>=13.0.0)
 ├── README.md            # This file
 ├── CHANGELOG.md         # Version history and changes

@@ -40,6 +40,7 @@ License: MIT
 """
 
 import json
+import math
 import re
 import time
 from datetime import datetime
@@ -139,6 +140,15 @@ INSS_TAX_RATE: float = 0.11
 """INSS (Instituto Nacional do Seguro Social) contribution rate
 withheld from the administrator's Pró-labore. Fixed at 11%
 for Simples Nacional companies."""
+
+INSS_CEILING: float = 8_475.55
+"""INSS contribution ceiling (teto previdenciário) for 2026 (R$ 8.475,55).
+
+Regardless of how high the Pró-labore is, the INSS contribution base
+is capped at this value. The maximum monthly INSS a contributor pays
+is therefore R$ 932,31 (11% × R$ 8.475,55).
+
+Source: INSS / Receita Federal — Portaria Interministerial MPS/MF 2026."""
 
 FATOR_R_TARGET: float = 0.28
 """Minimum Fator R threshold (28%) to qualify for Anexo III
@@ -365,9 +375,9 @@ class PositiveFloatPrompt(FloatPrompt):
             raise InvalidResponse(
                 "[status.danger]  ✗ Please enter a valid number.[/]"
             )
-        if result <= 0:
+        if not math.isfinite(result) or result <= 0:
             raise InvalidResponse(
-                "[status.danger]  ✗ Value must be greater than zero.[/]"
+                "[status.danger]  ✗ Value must be a finite number greater than zero.[/]"
             )
         return result
 
@@ -431,9 +441,9 @@ class NonNegativeFloatPrompt(FloatPrompt):
             raise InvalidResponse(
                 "[status.danger]  ✗ Please enter a valid number.[/]"
             )
-        if result < 0:
+        if not math.isfinite(result) or result < 0:
             raise InvalidResponse(
-                "[status.danger]  ✗ Value cannot be negative.[/]"
+                "[status.danger]  ✗ Value must be a finite, non-negative number.[/]"
             )
         return result
 
@@ -690,7 +700,10 @@ def calculate_taxes(
     ideal_pro_labore: float = max(fator_r_minimum, LEGAL_MINIMUM_WAGE)
 
     # Step 4: INSS contribution (withheld from administrator's salary)
-    inss_tax: float = ideal_pro_labore * INSS_TAX_RATE
+    # The contribution base is capped at the INSS ceiling (teto
+    # previdenciário). Above R$ 8.475,55 the contribution stops growing.
+    inss_base: float = min(ideal_pro_labore, INSS_CEILING)
+    inss_tax: float = inss_base * INSS_TAX_RATE
 
     # Step 5: DAS tax (monthly Simples Nacional tax on gross revenue)
     estimated_das: float = gross_revenue_brl * DAS_TAX_RATE
@@ -1056,8 +1069,11 @@ def display_results(
     )
 
     # ─ Deductions
+    # Show INSS label with "capped" indicator when the ceiling is active
+    inss_capped = results["ideal_pro_labore"] > INSS_CEILING
+    inss_label = "INSS (11%, capped)" if inss_capped else "INSS (11%)"
     table.add_row(
-        "INSS (11%)",
+        inss_label,
         Text(f"- {format_brl(results['inss_tax'])}", style="money.negative"),
     )
     table.add_row(

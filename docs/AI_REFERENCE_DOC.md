@@ -16,13 +16,14 @@ This application is built for Brazilian micro and small businesses (ME/EPP) oper
 
 _AI Agents: Verify these values for the current operational year before executing code changes._
 
-| Variable                      | 2026 Value  | Context / Trigger                                                                                             |
-| :---------------------------- | :---------- | :------------------------------------------------------------------------------------------------------------ |
-| **Federal Minimum Wage**      | R$ 1.621,00 | The absolute legal floor for a _Pró-labore_.                                                                  |
-| **Fator R Target**            | 28% (0.28)  | The ratio of payroll to revenue required for Anexo III.                                                       |
-| **INSS Tax Rate**             | 11% (0.11)  | Social security contribution levied on the _Pró-labore_.                                                      |
-| **Effective DAS (Bracket 1)** | ~3.054%     | The net tax rate for Anexo III (up to R$ 180k/year) after ISS, PIS, and COFINS export exemptions are applied. |
-| **IRPF Dependent Deduction**  | R$ 189,59   | Monthly IRPF deduction per declared dependent.                                                                |
+| Variable                      | 2026 Value      | Context / Trigger                                                                                             |
+| :---------------------------- | :-------------- | :------------------------------------------------------------------------------------------------------------ |
+| **Federal Minimum Wage**      | R$ 1.621,00     | The absolute legal floor for a _Pró-labore_.                                                                  |
+| **Fator R Target**            | 28% (0.28)      | The ratio of payroll to revenue required for Anexo III.                                                       |
+| **INSS Tax Rate**             | 11% (0.11)      | Social security contribution levied on the _Pró-labore_.                                                      |
+| **INSS Ceiling**              | R$ 8.475,55     | Teto previdenciário — maximum INSS contribution base. INSS is capped at R$ 932,31/month.                     |
+| **Effective DAS (Bracket 1)** | ~3.054%         | The net tax rate for Anexo III (up to R$ 180k/year) after ISS, PIS, and COFINS export exemptions are applied. |
+| **IRPF Dependent Deduction**  | R$ 189,59       | Monthly IRPF deduction per declared dependent.                                                                |
 
 ---
 
@@ -76,9 +77,9 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 
 - The `calculate_taxes()` function accepts `(revenue_usd, exchange_rate)` as positional args plus optional keyword args for deductions. All existing callers work without changes.
 - The return dictionary preserves all original keys and adds new IRPF keys: `irpf_tax`, `irpf_standard`, `irpf_reducer`, `taxable_base`, `irpf_deductions`.
-- 92 unit tests validate the mathematical engine.
+- 122 unit tests across 17 test classes validate the mathematical engine.
 - All visual styling uses semantic tokens from `RCAL_THEME`. Do not use inline color strings.
-- Input validation is handled by `MonthYearPrompt`, `PositiveFloatPrompt`, `NonNegativeIntPrompt`, and `NonNegativeFloatPrompt` subclasses.
+- Input validation is handled by `MonthYearPrompt`, `PositiveFloatPrompt`, `NonNegativeIntPrompt`, and `NonNegativeFloatPrompt` subclasses. Float prompts reject `NaN` and `Infinity` via `math.isfinite()` guards.
 - State persistence functions (`load_state`, `save_state`, `clear_state`) must never raise exceptions — they are convenience features that fail silently.
 
 ### Calculation Functions
