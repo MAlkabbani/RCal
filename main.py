@@ -75,15 +75,15 @@ RCAL_THEME = Theme(
     {
         # ─ Primary brand
         "brand": "bold #00b4d8",          # vivid cyan — the "RCal blue"
-        "brand.dim": "#0077b6",           # darker accent
+        "brand.dim": "#0096c7",           # deeper cyan, increased brightness from previous
         # ─ Semantic money tokens
         "money.positive": "bold #2ec4b6", # teal-green for income
         "money.negative": "bold #e63946", # warm red for deductions
         "money.highlight": "bold #f4a261",  # amber for key results
-        "money.total": "bold bright_white on #264653",  # grand total
+        "money.total": "bold bright_white on #1d3557",  # grand total (higher contrast bg)
         # ─ Text hierarchy
-        "label": "#adb5bd",               # muted gray for row labels
-        "label.dim": "dim #6c757d",       # secondary info
+        "label": "#f8f9fa",               # bright white/gray for maximum readability
+        "label.dim": "#adb5bd",           # medium-light gray (removed 'dim' ANSI flag)
         "heading": "bold bright_white",
         # ─ Status indicators
         "status.ok": "bold #2ec4b6",
@@ -91,10 +91,10 @@ RCAL_THEME = Theme(
         "status.danger": "bold #e63946",
         # ─ Surfaces & borders
         "border.primary": "#00b4d8",
-        "border.dim": "#264653",
+        "border.dim": "#457b9d",          # brighter border for distinct separation
         # ─ Input prompts
         "prompt.label": "bold #00b4d8",
-        "prompt.hint": "dim #6c757d",
+        "prompt.hint": "#adb5bd",         # matches label.dim, bright enough to read easily
     }
 )
 
