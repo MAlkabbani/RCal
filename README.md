@@ -36,13 +36,15 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 
 - 🧮 **Automatic Fator R optimization** — calculates the ideal Pró-labore
 - 💱 **USD → BRL conversion** — built for service exporters
+- 🏛️ **Exact IRPF 2026 calculation** — progressive table + Lei nº 15.270/2025 reducer
+- 📝 **Optional deductions** — dependents, PGBL pension, alimony (saved between sessions)
 - 🎨 **Premium terminal UI** — branded ASCII header, 3-zone layout, themed colors via [Rich](https://github.com/Textualize/rich)
-- 📊 **Visual revenue breakdown** — stacked bar chart showing salary/taxes/dividends split
+- 📊 **Visual revenue breakdown** — stacked bar chart showing salary/INSS/IRPF/DAS/dividends split
 - 🛡️ **Input validation** — rejects invalid dates, zero/negative numbers with clear error messages
 - 🔄 **Multi-scenario loop** — compare different months, revenues, or exchange rates without restarting
-- ⚠️ **Smart warnings** — IRPF alert, Bracket 1 ceiling warning, negative dividends danger panel
+- ⚠️ **Smart warnings** — Bracket 1 ceiling warning, negative dividends danger panel
 - 📦 **Dividend calculation** — shows tax-free dividend distribution
-- 🏠 **Net take-home** — total after all deductions with effective tax burden %
+- 🏠 **Net take-home** — total after all deductions (INSS + IRPF) with effective tax burden %
 
 ---
 
@@ -54,7 +56,9 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 | `DAS_TAX_RATE` | 3,054% | Simples Nacional (Anexo III, 1st bracket) |
 | `INSS_TAX_RATE` | 11% | Social security contribution |
 | `FATOR_R_TARGET` | 28% | Minimum payroll-to-revenue ratio |
-| `IRPF_LIMIT` | R$ 5.000,00 | IRPF withholding threshold |
+| `IRPF_TABLE_2026` | 5 brackets | Progressive table: Isento / 7.5% / 15% / 22.5% / 27.5% |
+| `IRPF_DEPENDENT_DEDUCTION` | R$ 189,59 | Monthly IRPF deduction per dependent |
+| `IRPF_REDUCER_*` | Lei 15.270/2025 | Full exemption ≤ R$ 5k, phase-out to R$ 7.35k |
 
 ---
 
@@ -128,6 +132,8 @@ When you run the tool, it will interactively prompt you for:
 💵 Monthly Revenue in USD: 5000
 💱 USD → BRL Exchange Rate: 5.75
 
+📝 Apply IRPF deductions? (dependents, PGBL, alimony) [y/N]: n
+
   ╭─── 📅 Month ───╮ ╭──── 💵 Revenue ────╮ ╭─── 💱 Rate ────╮
   │    03/2026     │ │    US$ 5,000.00    │ │   R$ 5.7500    │
   ╰────────────────╯ ╰────────────────────╯ ╰────────────────╯
@@ -139,19 +145,21 @@ When you run the tool, it will interactively prompt you for:
   │ │ ✨ Ideal Pró-labore  │               R$ 8.050,00 ││
   │ │ INSS (11%)           │              - R$ 885,50  ││
   │ │ DAS (Simples)        │              - R$ 878,02  ││
-  │ │ IRPF Status          │   ⚠️ IRPF Triggered!      ││
+  │ │ IRPF Taxable Base    │               R$ 7.164,50 ││
+  │ │ IRPF (Lei 15.270)    │            - R$ 1.036,80  ││
   │ │ 📈 Bracket Warning   │   ⚠️ Exceeds R$ 180k      ││
   │ └──────────────────────┴──────────────────────────┘│
   ╰────────────────────────────────────────────────────╯
 
   ╭────────────── 💰 Your Bottom Line ──────────────╮
   │  📦 Tax-Free Dividends         R$ 19.821,97     │
-  │  🏠 Net Take-Home              R$ 26.986,47     │
-  │  📉 Effective Tax Burden              6.1%      │
+  │  🏠 Net Take-Home              R$ 25.949,67     │
+  │  📉 Effective Tax Burden              9.7%      │
   │                                                  │
   │  Revenue Distribution                            │
   │  ██████████████████████████████████████████████  │
-  │  █ Salary 25%  █ INSS 3%  █ DAS 3%  █ Yours 69% │
+  │  █ Salary 21%  █ INSS 3%  █ IRPF 4%  █ DAS 3%  │
+  │  █ Yours 69%                                     │
   ╰──────────────────────────────────────────────────╯
 
 🔄 Calculate another month? [y/n] (y):
@@ -171,10 +179,12 @@ This makes comparing multiple scenarios effortless.
 
 ### 💾 Memory
 
-RCal **remembers your last inputs** between sessions. When you relaunch, your previous month, revenue, and exchange rate are pre-filled as defaults.
+RCal **remembers your last inputs** between sessions. When you relaunch, your previous month, revenue, exchange rate, and IRPF deduction settings are pre-filled as defaults.
 
 - State is stored in `~/.rcal_state.json` (human-readable JSON)
-- Use **[4] Clear memory** from the menu to wipe it
+- Deduction values (dependents, PGBL, alimony) are also persisted
+- If you used deductions last time, the prompt defaults to "yes" on next launch
+- Use **[4] Clear memory** from the menu to wipe everything
 - Or manually delete: `rm ~/.rcal_state.json`
 
 ---
@@ -190,9 +200,10 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 | 3 | Ideal Pró-labore | `max(Fator_R_Min, 1621.00)` |
 | 4 | INSS Tax | `Pró-labore × 0.11` |
 | 5 | DAS Tax | `Gross_Revenue × 0.03054` |
-| 6 | IRPF Check | `Pró-labore > 5000 → ⚠️ Warning` |
-| 7 | Dividends | `Gross_Revenue − Pró-labore − DAS` |
-| 8 | Net Take-Home | `(Pró-labore − INSS) + Dividends` |
+| 6 | IRPF Taxable Base | `Pró-labore − INSS − Dependents − PGBL − Alimony` |
+| 7 | IRPF Calculation | Progressive table + Lei 15.270/2025 reducer |
+| 8 | Dividends | `Gross_Revenue − Pró-labore − DAS` |
+| 9 | Net Take-Home | `(Pró-labore − INSS − IRPF) + Dividends` |
 
 ---
 
@@ -202,7 +213,7 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 RCal/
 ├── rcal                 # One-command launcher (bash)
 ├── main.py              # Main application (UI + calculation engine)
-├── test_main.py         # Unit tests (46 tests, 9 test classes)
+├── test_main.py         # Unit tests (92 tests, 13 test classes)
 ├── requirements.txt     # Python dependencies (rich>=13.0.0)
 ├── README.md            # This file
 ├── CHANGELOG.md         # Version history and changes

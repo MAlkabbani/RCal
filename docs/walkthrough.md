@@ -6,6 +6,39 @@ RCal is a standalone Python CLI application that calculates the optimal **Pró-l
 
 ## 📦 Version History
 
+### v3.0 — Full 2026 IRPF Calculation Engine (March 2026)
+
+Major upgrade replacing the binary IRPF status check with exact tax calculation per **Lei nº 15.270/2025**.
+
+#### 🏦 IRPF Calculation Engine
+
+- **`calculate_irpf_2026()` pure function** implementing 3-step algorithm:
+  1. Standard progressive table (5 brackets from Receita Federal)
+  2. Lei nº 15.270/2025 reducer (full exemption ≤ R$ 5k, phase-out R$ 5k–R$ 7.35k)
+  3. Final IRPF = max(Standard − Reducer, 0)
+- Net Take-Home now subtracts IRPF: `(Pró-labore − INSS − IRPF) + Dividends`
+- Effective Tax Burden includes IRPF: `(INSS + DAS + IRPF) / Gross`
+
+#### 📝 Optional IRPF Deductions
+
+- CLI prompts for: dependents (R$ 189,59/each), PGBL pension (capped at 12% of Pró-labore), alimony
+- Gated behind a `Confirm` prompt that defaults based on saved state
+- Smart memory: if previous deductions were non-zero, defaults to "yes" on next launch
+- All deduction values persisted in `~/.rcal_state.json` (backward compatible with old files)
+
+#### 📊 Updated UI
+
+- **Zone 2 Tax Breakdown**: New "IRPF Taxable Base" (dim) and "IRPF (Lei 15.270/2025)" (red) rows
+- **Zone 3 Bottom Line**: IRPF included in effective tax burden percentage
+- **Breakdown Bar**: IRPF segment (deep red `#c1121f`) appears when IRPF > 0
+
+#### 🧪 Expanded Test Suite
+
+- 46 → **92 tests** across 13 test classes
+- New: `TestIRPF2026` (12), `TestIRPFDeductions` (8), `TestNetTakeHomeWithIRPF` (5)
+- New: `TestNonNegativeIntPrompt` (6), `TestNonNegativeFloatPrompt` (4)
+- Updated: `TestHighRevenueScenario` with exact IRPF value (R$ 1.036,80)
+
 ### v2.1 — One-Command Launcher & Cross-Session Memory (March 2026)
 
 Quality-of-life improvements eliminating setup friction and adding persistent memory.
@@ -85,7 +118,7 @@ A complete overhaul of the terminal experience, transforming RCal from a single-
 
 - `rcal`: One-command bash launcher (auto-venv, auto-install, auto-run)
 - `main.py`: Application entry point containing UI layer + calculation engine
-- `test_main.py`: Unit test suite (46 tests, 9 test classes)
+- `test_main.py`: Unit test suite (92 tests, 13 test classes)
 - `requirements.txt`: Single dependency — `rich>=13.0.0`
 - `CHANGELOG.md`: Version history
 - `docs/AI_REFERENCE_DOC.md`: Canonical source of truth for business logic
@@ -95,13 +128,14 @@ A complete overhaul of the terminal experience, transforming RCal from a single-
 
 - **Single file**: All code in `main.py` for maximum simplicity
 - **No new dependencies**: Everything uses `rich>=13.0.0` + Python stdlib
-- **Stable API**: `calculate_taxes()` function signature and return dict unchanged across versions
+- **Stable API**: `calculate_taxes()` signature accepts optional kwargs for deductions; all existing callers work unchanged
+- **Pure calculation**: `calculate_irpf_2026()` is side-effect-free and independently testable
 - **Separation of concerns**: Calculation logic (`calculate_taxes()`) is fully separate from UI (`display_*` functions)
 - **Silent persistence**: State functions never raise — they are convenience features that degrade gracefully
 
 ## 📸 Verification
 
-### Automated Tests (46/46 passing)
+### Automated Tests (92/92 passing)
 
 ```bash
 ./rcal    # or: source .venv/bin/activate && python3 -m unittest test_main -v

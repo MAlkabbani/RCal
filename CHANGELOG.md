@@ -4,6 +4,53 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [3.0.0] — 2026-03-31
+
+### 🧮 Full 2026 IRPF Calculation Engine (Lei nº 15.270/2025)
+
+The application now performs the exact Individual Income Tax (IRPF) calculation instead of displaying a binary status check. This is a major update that affects the Net Take-Home figure for high-income scenarios.
+
+### Added
+
+- **`calculate_irpf_2026()` Pure Function** — 3-step IRPF algorithm: standard progressive table → Lei nº 15.270/2025 reducer → final tax amount. Returns `(standard_irpf, reducer_amount, final_irpf)` tuple.
+- **2026 IRPF Progressive Table** — `IRPF_TABLE_2026` constant with all 5 brackets from Receita Federal (Isento / 7.5% / 15% / 22.5% / 27.5%).
+- **Lei nº 15.270/2025 Reducer** — Full exemption for taxable base ≤ R$ 5.000, phase-out zone R$ 5.000–R$ 7.350, no reduction above R$ 7.350.
+- **CLI Deduction Inputs** — Optional prompts for dependents (R$ 189,59 each), PGBL pension (capped at 12% of Pró-labore), and alimony (Pensão Alimentícia). Gated behind a `Confirm` prompt that defaults based on saved state.
+- **`NonNegativeIntPrompt`** — Prompt subclass accepting 0 and positive integers (for dependents count).
+- **`NonNegativeFloatPrompt`** — Prompt subclass accepting 0.0 and positive floats (for PGBL/alimony amounts).
+- **`collect_deductions()`** — Collects optional deduction inputs with smart defaults from saved state.
+- **Deduction Persistence** — Deduction values (num_dependents, pgbl_contribution, alimony) saved to `~/.rcal_state.json` and pre-filled on next launch. Smart defaulting: if previous deductions were non-zero, prompts default to "yes".
+- **IRPF Taxable Base Row** — Displayed in the Tax Breakdown table (Zone 2).
+- **IRPF Amount Row** — Shows the calculated IRPF or "✅ Tax Free" in the Tax Breakdown table.
+- **IRPF Bar Segment** — Revenue distribution bar includes an IRPF segment (deep red) when IRPF > 0.
+- **New Test Classes** — `TestIRPF2026` (12 tests), `TestIRPFDeductions` (8 tests), `TestNetTakeHomeWithIRPF` (5 tests), `TestNonNegativeIntPrompt` (6 tests), `TestNonNegativeFloatPrompt` (4 tests).
+- **AI_REFERENCE_DOC.md §7** — New section "2026 IRPF Rules & Deductions" with progressive table, reducer formula, deduction types, and three official Receita Federal source URLs.
+
+### Changed
+
+- **`calculate_taxes()`** — Now accepts optional keyword args: `num_dependents`, `pgbl_contribution`, `alimony`. Returns 5 new keys: `irpf_tax`, `irpf_standard`, `irpf_reducer`, `taxable_base`, `irpf_deductions`. All existing keys preserved.
+- **Net Take-Home Formula** — Now subtracts IRPF: `(Pró-labore - INSS - IRPF) + Dividends`. Previously assumed 0% IRPF.
+- **Effective Tax Burden** — Now includes IRPF: `(INSS + DAS + IRPF) / Gross`.
+- **IRPF Status Display** — Shows calculated amount (e.g., "⚠️ IRPF: R$ 1.036,80") instead of the old binary "Triggered / Tax Free".
+- **`save_state()`** / **`load_state()`** — Extended to persist deduction values. Backward compatible with pre-v3.0 state files.
+- **`render_breakdown_bar()`** — Net salary segment now subtracts IRPF. IRPF segment added when > 0.
+- **`main()`** — Integrates deduction collection into the interactive loop. Deductions re-prompted on each calculation (since Pró-labore changes with revenue/rate).
+- **test_main.py** — Expanded from 46 to 92 tests (13 test classes). Updated `TestHighRevenueScenario` with exact IRPF expectations.
+- **README.md** — Updated constants table, math table, and project structure.
+- **CHANGELOG.md** — Added this version entry.
+
+### Removed
+
+- **`IRPF_LIMIT` constant** — Replaced by the full progressive table + Lei nº 15.270/2025 reducer. The old R$ 5.000 threshold was a simplified proxy that has been superseded by exact calculation.
+
+### Technical
+
+- **No new dependencies** — all enhancements use `rich>=13.0.0` + Python stdlib
+- **New constants** — `IRPF_TABLE_2026`, `IRPF_DEPENDENT_DEDUCTION`, `IRPF_REDUCER_FULL_EXEMPTION_LIMIT`, `IRPF_REDUCER_PHASE_OUT_LIMIT`, `IRPF_REDUCER_BASE`, `IRPF_REDUCER_FACTOR`
+- **Backward compatible** — `calculate_taxes()` default kwargs ensure all existing callers work unchanged
+
+---
+
 ## [2.1.0] — 2026-03-31
 
 ### 🚀 One-Command Launcher & Cross-Session Memory

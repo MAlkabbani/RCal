@@ -144,16 +144,59 @@ FATOR_R_TARGET: float = 0.28
 """Minimum Fator R threshold (28%) to qualify for Anexo III
 taxation instead of the higher Anexo V."""
 
-IRPF_LIMIT: float = 5000.00
-"""Monthly Pró-labore threshold above which IRPF (Imposto de Renda
-Pessoa Física — personal income tax) withholding applies.
-Below this amount, the income falls within the tax-exempt bracket."""
+# ──────────────────────────────────────────────────────────────────
+# 2026 IRPF — Progressive Table & Lei nº 15.270/2025 Reducer
+#
+# The Individual Income Tax (IRPF) is calculated in three steps:
+#   1. Apply the standard progressive table to the taxable base.
+#   2. Apply the 2026 reducer (full exemption up to R$ 5.000,
+#      phase-out between R$ 5.000 and R$ 7.350).
+#   3. Final IRPF = max(Standard IRPF - Reducer, 0).
+#
+# Sources:
+#   Receita Federal: https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026
+#   Lei nº 15.270/2025: https://www.gov.br/fazenda/pt-br/assuntos/noticias/2026/janeiro/receita-divulga-nova-tabela-do-irpf-com-as-mudancas-apos-isencao-para-quem-ganha-ate-r-5-mil
+# ──────────────────────────────────────────────────────────────────
+
+IRPF_TABLE_2026: list[tuple[float, float, float]] = [
+    #  (upper_limit,   rate,     deduction)
+    (2_428.80,         0.000,    0.00),     # Isento
+    (2_826.65,         0.075,    182.16),   # 7.5%
+    (3_751.05,         0.150,    394.16),   # 15%
+    (4_664.68,         0.225,    675.49),   # 22.5%
+    (float("inf"),     0.275,    908.73),   # 27.5%
+]
+"""2026 IRPF progressive monthly table (Tabela Progressiva Mensal).
+
+Each tuple is (upper_limit, alíquota, deduction). The last bracket
+uses float('inf') as the upper bound. To calculate the standard
+IRPF: find the matching bracket, then compute
+(taxable_base × rate) - deduction."""
+
+IRPF_DEPENDENT_DEDUCTION: float = 189.59
+"""Monthly deduction per dependent for IRPF calculation (R$ 189,59).
+Applied before computing the taxable base."""
+
+IRPF_REDUCER_FULL_EXEMPTION_LIMIT: float = 5_000.00
+"""Taxable base threshold for full IRPF exemption under Lei nº 15.270/2025.
+If the taxable base is at or below this value, the final IRPF is R$ 0,00."""
+
+IRPF_REDUCER_PHASE_OUT_LIMIT: float = 7_350.00
+"""Taxable base threshold above which the 2026 reducer no longer applies.
+Between R$ 5.000,01 and R$ 7.350,00 the reducer gradually decreases."""
+
+IRPF_REDUCER_BASE: float = 978.62
+"""Base value for the 2026 reducer formula: 978.62 - (0.133145 × taxable_base)."""
+
+IRPF_REDUCER_FACTOR: float = 0.133145
+"""Multiplier for the 2026 reducer formula."""
 
 STATE_FILE: Path = Path.home() / ".rcal_state.json"
 """Path to the persistent state file.
 
-Stores the user's last-used inputs (month, revenue, exchange rate)
-as JSON so they can be pre-filled on the next application launch.
+Stores the user's last-used inputs (month, revenue, exchange rate,
+and optional IRPF deduction settings) as JSON so they can be
+pre-filled on the next application launch.
 Located in the user's home directory as a hidden file.
 
 The file is human-readable and can be manually edited or deleted.
@@ -169,17 +212,23 @@ Use the in-app '[4] Clear Memory' option to wipe it cleanly."""
 # ──────────────────────────────────────────────────────────────────
 
 
-def load_state() -> dict[str, float | str]:
+def load_state() -> dict[str, float | str | int]:
     """Load the last-used inputs from the persistent state file.
 
     Reads ~/.rcal_state.json and returns a dictionary with keys:
         - month_year (str): e.g. "03/2026"
         - revenue_usd (float): e.g. 883.0
         - exchange_rate (float): e.g. 5.23
+        - num_dependents (int): e.g. 2 (optional, defaults to 0 if missing)
+        - pgbl_contribution (float): e.g. 500.0 (optional, defaults to 0.0)
+        - alimony (float): e.g. 1000.0 (optional, defaults to 0.0)
 
     If the file doesn't exist, is corrupted, or has an unexpected
     format, returns an empty dict so the app falls back to fresh
     prompts. This function never raises exceptions.
+
+    Backward compatible: old state files without deduction keys
+    are loaded successfully — missing keys are simply absent.
 
     Returns:
         Dictionary with saved state, or empty dict on any error.
@@ -198,6 +247,10 @@ def save_state(
     month_year: str,
     revenue_usd: float,
     exchange_rate: float,
+    *,
+    num_dependents: int = 0,
+    pgbl_contribution: float = 0.0,
+    alimony: float = 0.0,
 ) -> None:
     """Save the current inputs to the persistent state file.
 
@@ -205,15 +258,24 @@ def save_state(
     Silently ignores write failures (e.g., permissions issues)
     since persistence is a convenience feature, not critical.
 
+    Deduction values are always saved (even if 0) to provide
+    explicit defaults on next launch.
+
     Args:
         month_year: The reference month/year string.
         revenue_usd: Monthly revenue in USD.
         exchange_rate: USD → BRL exchange rate.
+        num_dependents: Number of IRPF dependents.
+        pgbl_contribution: PGBL pension contribution in BRL.
+        alimony: Alimony (Pensão Alimentícia) amount in BRL.
     """
     state = {
         "month_year": month_year,
         "revenue_usd": revenue_usd,
         "exchange_rate": exchange_rate,
+        "num_dependents": num_dependents,
+        "pgbl_contribution": pgbl_contribution,
+        "alimony": alimony,
     }
     try:
         STATE_FILE.write_text(
@@ -310,6 +372,145 @@ class PositiveFloatPrompt(FloatPrompt):
         return result
 
 
+class NonNegativeIntPrompt(Prompt):
+    """Prompt that validates non-negative integer input.
+
+    Accepts 0 and positive integers. Used for the number of
+    dependents input where 0 is a valid choice.
+    """
+
+    def process_response(self, value: str) -> int:
+        """Validate that the entered value is a non-negative integer.
+
+        Args:
+            value: User-entered string.
+
+        Returns:
+            Validated non-negative integer.
+
+        Raises:
+            InvalidResponse: If value is not a non-negative integer.
+        """
+        value = value.strip()
+        try:
+            result = int(value)
+        except ValueError:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Please enter a whole number (0 or above).[/]"
+            )
+        if result < 0:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Value cannot be negative.[/]"
+            )
+        return result
+
+
+class NonNegativeFloatPrompt(FloatPrompt):
+    """FloatPrompt that accepts zero and positive values.
+
+    Unlike PositiveFloatPrompt, this accepts 0.0 — used for
+    optional deduction amounts (PGBL, alimony) where zero
+    means "no deduction".
+    """
+
+    def process_response(self, value: str) -> float:
+        """Validate that the entered value is a non-negative number.
+
+        Args:
+            value: User-entered string.
+
+        Returns:
+            Validated non-negative float.
+
+        Raises:
+            InvalidResponse: If value is not a non-negative number.
+        """
+        try:
+            result = float(value)
+        except ValueError:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Please enter a valid number.[/]"
+            )
+        if result < 0:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Value cannot be negative.[/]"
+            )
+        return result
+
+
+# ──────────────────────────────────────────────────────────────────
+# IRPF 2026 Calculation Engine
+#
+# Pure function implementing the 3-step IRPF algorithm:
+#   1. Standard progressive table (Tabela Progressiva Mensal)
+#   2. Lei nº 15.270/2025 reducer (exemption + phase-out)
+#   3. Final IRPF = max(Standard - Reducer, 0)
+#
+# This function has no side effects and can be unit-tested in
+# isolation from the rest of the application.
+# ──────────────────────────────────────────────────────────────────
+
+
+def calculate_irpf_2026(
+    taxable_base: float,
+) -> tuple[float, float, float]:
+    """Calculate the 2026 IRPF using the progressive table + Lei 15.270/2025 reducer.
+
+    This implements the 3-step IRPF calculation mandated for tax year 2026:
+
+    Step 1 — Standard Progressive Table:
+        Apply the Tabela Progressiva Mensal to the taxable base.
+        Standard IRPF = (taxable_base × alíquota) - dedução.
+
+    Step 2 — Lei nº 15.270/2025 Reducer:
+        - If taxable_base ≤ R$ 5.000: Final IRPF = R$ 0,00 (full exemption).
+        - If R$ 5.000,01 ≤ taxable_base ≤ R$ 7.350:
+          Reduction = R$ 978,62 - (0,133145 × taxable_base).
+          Final IRPF = max(Standard IRPF - Reduction, 0).
+        - If taxable_base > R$ 7.350: Final IRPF = Standard IRPF (no reduction).
+
+    Step 3 — Return all three values for transparency.
+
+    Args:
+        taxable_base: The IRPF taxable base after all deductions
+            (Pró-labore - INSS - dependents - PGBL - alimony).
+
+    Returns:
+        Tuple of (standard_irpf, reducer_amount, final_irpf).
+        - standard_irpf: Tax from the progressive table alone.
+        - reducer_amount: Reduction applied by Lei 15.270/2025.
+        - final_irpf: The actual tax owed after the reducer.
+    """
+    # Step 1: Standard progressive table
+    if taxable_base <= 0:
+        return (0.0, 0.0, 0.0)
+
+    standard_irpf: float = 0.0
+    for upper_limit, rate, deduction in IRPF_TABLE_2026:
+        if taxable_base <= upper_limit:
+            standard_irpf = max(taxable_base * rate - deduction, 0.0)
+            break
+
+    # Step 2: Apply the 2026 reducer (Lei nº 15.270/2025)
+    if taxable_base <= IRPF_REDUCER_FULL_EXEMPTION_LIMIT:
+        # Full exemption: zero the tax entirely
+        reducer_amount: float = standard_irpf
+        final_irpf: float = 0.0
+    elif taxable_base <= IRPF_REDUCER_PHASE_OUT_LIMIT:
+        # Phase-out zone: gradual reduction
+        reducer_amount = max(
+            IRPF_REDUCER_BASE - (IRPF_REDUCER_FACTOR * taxable_base),
+            0.0,
+        )
+        final_irpf = max(standard_irpf - reducer_amount, 0.0)
+    else:
+        # Above phase-out: no reduction
+        reducer_amount = 0.0
+        final_irpf = standard_irpf
+
+    return (standard_irpf, reducer_amount, final_irpf)
+
+
 # ──────────────────────────────────────────────────────────────────
 # Formatting Utilities
 # ──────────────────────────────────────────────────────────────────
@@ -356,10 +557,11 @@ def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Te
     bar chart that instantly communicates: "How much do I keep?"
 
     Each segment is proportionally sized and color-coded:
-        - Amber:    Net Salary (Pró-labore after INSS)
+        - Amber:      Net Salary (Pró-labore after INSS and IRPF)
         - Red-Orange: INSS contribution
-        - Red:      DAS tax
-        - Teal:     What you keep (dividends)
+        - Deep Red:   IRPF (when > 0)
+        - Red:        DAS tax
+        - Teal:       What you keep (dividends)
 
     Args:
         results: Dictionary returned by calculate_taxes().
@@ -373,7 +575,8 @@ def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Te
         return Text("  (No revenue to display)", style="label.dim")
 
     # Segment definitions: (value, color, label)
-    pro_labore_net = results["ideal_pro_labore"] - results["inss_tax"]
+    irpf = results.get("irpf_tax", 0.0)
+    pro_labore_net = results["ideal_pro_labore"] - results["inss_tax"] - irpf
     inss = results["inss_tax"]
     das = results["estimated_das"]
     remaining = gross - results["ideal_pro_labore"] - das
@@ -382,21 +585,25 @@ def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Te
     # Normalize against total outflows so the bar stays within width.
     if remaining < 0:
         # Show costs as proportion of total cost (not revenue)
-        total_cost = pro_labore_net + inss + das
+        total_cost = pro_labore_net + inss + irpf + das
         segments = [
             (pro_labore_net, "#f4a261", "Salary"),
             (inss, "#e76f51", "INSS"),
-            (das, "#e63946", "DAS"),
         ]
+        if irpf > 0:
+            segments.append((irpf, "#c1121f", "IRPF"))
+        segments.append((das, "#e63946", "DAS"))
         denominator = total_cost
         suffix = " of costs"
     else:
         segments = [
             (pro_labore_net, "#f4a261", "Salary"),
             (inss, "#e76f51", "INSS"),
-            (das, "#e63946", "DAS"),
-            (remaining, "#2ec4b6", "Yours"),
         ]
+        if irpf > 0:
+            segments.append((irpf, "#c1121f", "IRPF"))
+        segments.append((das, "#e63946", "DAS"))
+        segments.append((remaining, "#2ec4b6", "Yours"))
         denominator = gross
         suffix = ""
 
@@ -440,21 +647,36 @@ def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Te
 def calculate_taxes(
     revenue_usd: float,
     exchange_rate: float,
-) -> dict[str, float | str]:
+    *,
+    num_dependents: int = 0,
+    pgbl_contribution: float = 0.0,
+    alimony: float = 0.0,
+) -> dict[str, float | str | dict]:
     """Calculate all tax components for a given monthly revenue.
 
-    This function implements the Fator R optimization strategy:
+    This function implements the Fator R optimization strategy and,
+    as of v3.0, the exact 2026 IRPF calculation with deductions:
+
     1. Convert USD revenue to BRL using the provided exchange rate.
     2. Calculate the minimum Pró-labore needed to keep Fator R >= 28%.
     3. Ensure Pró-labore is at least the legal minimum wage.
-    4. Compute INSS, DAS, IRPF status, dividends, and net take-home.
+    4. Compute INSS and DAS.
+    5. Compute the IRPF taxable base (Pró-labore - INSS - deductions).
+    6. Apply the 2026 progressive table + Lei nº 15.270/2025 reducer.
+    7. Compute dividends and net take-home (now minus IRPF).
 
     Args:
         revenue_usd: Monthly revenue in US dollars.
         exchange_rate: Current USD → BRL exchange rate.
+        num_dependents: Number of IRPF dependents (R$ 189,59 each).
+        pgbl_contribution: PGBL pension contribution in BRL
+            (capped at 12% of Pró-labore).
+        alimony: Alimony (Pensão Alimentícia) amount in BRL.
 
     Returns:
-        Dictionary with all calculated tax components.
+        Dictionary with all calculated tax components. New keys added
+        in v3.0: irpf_tax, irpf_standard, irpf_reducer, taxable_base,
+        irpf_deductions.
     """
     # Step 1: Convert revenue to BRL
     gross_revenue_brl: float = revenue_usd * exchange_rate
@@ -473,14 +695,30 @@ def calculate_taxes(
     # Step 5: DAS tax (monthly Simples Nacional tax on gross revenue)
     estimated_das: float = gross_revenue_brl * DAS_TAX_RATE
 
-    # Step 6: IRPF check — personal income tax applies if Pró-labore > R$ 5.000
-    if ideal_pro_labore > IRPF_LIMIT:
-        irpf_status: str = (
-            "⚠️  IRPF Triggered! Pró-labore exceeds "
-            f"{format_brl(IRPF_LIMIT)}. Apply deductions."
-        )
+    # Step 6: IRPF — Calculate taxable base with deductions, then apply
+    #          the 2026 progressive table + Lei nº 15.270/2025 reducer
+    #
+    # Deduction order (all subtracted from Pró-labore to get taxable base):
+    #   1. INSS (mandatory, automatic)
+    #   2. Dependents (R$ 189,59 per dependent)
+    #   3. PGBL (capped at 12% of Pró-labore)
+    #   4. Alimony (full amount, court-ordered)
+    dependent_deduction: float = num_dependents * IRPF_DEPENDENT_DEDUCTION
+    pgbl_capped: float = min(pgbl_contribution, ideal_pro_labore * 0.12)
+    alimony_applied: float = max(alimony, 0.0)
+
+    taxable_base: float = (
+        ideal_pro_labore - inss_tax - dependent_deduction - pgbl_capped - alimony_applied
+    )
+    taxable_base = max(taxable_base, 0.0)  # Cannot go negative
+
+    standard_irpf, reducer_amount, final_irpf = calculate_irpf_2026(taxable_base)
+
+    # IRPF status label for display
+    if final_irpf == 0.0:
+        irpf_status: str = "✅ Tax Free"
     else:
-        irpf_status = "✅ Tax Free"
+        irpf_status = f"⚠️  IRPF: {format_brl(final_irpf)}"
 
     # Step 6b: Bracket 1 ceiling warning
     # The hardcoded DAS rate assumes annual revenue <= R$ 180.000,00.
@@ -498,11 +736,14 @@ def calculate_taxes(
 
     # Step 7: Available dividends (distributed tax-free to the partner)
     # Dividends = Revenue minus salary minus Simples Nacional tax
+    # Note: IRPF is NOT subtracted from dividends — it is withheld from the salary.
     available_dividends: float = gross_revenue_brl - ideal_pro_labore - estimated_das
 
     # Step 8: Total net take-home
-    # (Pró-labore after INSS deduction) + (tax-free dividends)
-    total_net_take_home: float = (ideal_pro_labore - inss_tax) + available_dividends
+    # (Pró-labore after INSS and IRPF deduction) + (tax-free dividends)
+    total_net_take_home: float = (
+        (ideal_pro_labore - inss_tax - final_irpf) + available_dividends
+    )
 
     return {
         "gross_revenue_brl": gross_revenue_brl,
@@ -511,6 +752,16 @@ def calculate_taxes(
         "inss_tax": inss_tax,
         "estimated_das": estimated_das,
         "irpf_status": irpf_status,
+        "irpf_tax": final_irpf,
+        "irpf_standard": standard_irpf,
+        "irpf_reducer": reducer_amount,
+        "taxable_base": taxable_base,
+        "irpf_deductions": {
+            "inss": inss_tax,
+            "dependents": dependent_deduction,
+            "pgbl": pgbl_capped,
+            "alimony": alimony_applied,
+        },
         "bracket_warning": bracket_warning,
         "available_dividends": available_dividends,
         "total_net_take_home": total_net_take_home,
@@ -632,6 +883,86 @@ def collect_inputs(
     return month_year, revenue_usd, exchange_rate
 
 
+def collect_deductions(
+    console: Console,
+    saved_state: dict[str, float | str | int] | None = None,
+) -> tuple[int, float, float]:
+    """Collect optional IRPF deduction inputs with smart defaults.
+
+    Prompts the user to optionally apply IRPF deductions. If saved state
+    contains non-zero deduction values from a previous session, the prompt
+    defaults to "yes" and pre-fills the amounts. Otherwise defaults to "no".
+
+    The logic for smart defaults:
+        - If saved state has any non-zero deduction value → default to yes
+        - If saved state has all-zero deductions → default to no
+        - If no saved state → default to no
+
+    A user who previously applied deductions gets them pre-filled, while
+    a user who never used deductions won't be bothered with extra prompts.
+
+    Args:
+        console: Rich console instance for output.
+        saved_state: Dictionary loaded from ~/.rcal_state.json.
+
+    Returns:
+        Tuple of (num_dependents, pgbl_contribution, alimony).
+    """
+    saved = saved_state or {}
+
+    # Determine if saved state has non-zero deductions
+    saved_dependents = saved.get("num_dependents", 0)
+    saved_pgbl = saved.get("pgbl_contribution", 0.0)
+    saved_alimony = saved.get("alimony", 0.0)
+
+    has_saved_deductions = (
+        (saved_dependents and saved_dependents > 0)
+        or (saved_pgbl and float(saved_pgbl) > 0)
+        or (saved_alimony and float(saved_alimony) > 0)
+    )
+
+    console.print()
+    apply_deductions = Confirm.ask(
+        "[prompt.label]📝 Apply IRPF deductions?[/] "
+        "[prompt.hint](dependents, PGBL, alimony)[/]",
+        console=console,
+        default=has_saved_deductions,
+    )
+
+    if not apply_deductions:
+        return (0, 0.0, 0.0)
+
+    console.print()
+
+    # ── Number of dependents ─────────────────────────────────────
+    default_dep = int(saved_dependents) if saved_dependents else 0
+    num_dependents: int = NonNegativeIntPrompt.ask(
+        "[prompt.label]👨‍👩‍👧 Number of Dependents[/] "
+        f"[prompt.hint](R$ {IRPF_DEPENDENT_DEDUCTION:,.2f}/each)[/]",
+        console=console,
+        default=default_dep,
+    )
+
+    # ── PGBL contribution ────────────────────────────────────────
+    default_pgbl = float(saved_pgbl) if saved_pgbl else 0.0
+    pgbl_contribution: float = NonNegativeFloatPrompt.ask(
+        "[prompt.label]🏦 PGBL Contribution (BRL)[/] "
+        "[prompt.hint](capped at 12% of Pró-labore)[/]",
+        console=console,
+        default=default_pgbl,
+    )
+
+    # ── Alimony ──────────────────────────────────────────────────
+    default_alimony = float(saved_alimony) if saved_alimony else 0.0
+    alimony: float = NonNegativeFloatPrompt.ask(
+        "[prompt.label]⚖️  Alimony / Pensão Alimentícia (BRL)[/]",
+        console=console,
+        default=default_alimony,
+    )
+
+    return (num_dependents, pgbl_contribution, alimony)
+
+
 # ──────────────────────────────────────────────────────────────────
 # Display — Results Output (3-Zone Visual Architecture)
 #
@@ -737,10 +1068,23 @@ def display_results(
         ),
     )
 
-    # ─ IRPF Status
-    irpf = str(results["irpf_status"])
-    irpf_style = "status.danger" if "⚠️" in irpf else "status.ok"
-    table.add_row("IRPF Status", Text(irpf, style=irpf_style))
+    # ─ IRPF
+    irpf_tax = results["irpf_tax"]
+    taxable_base = results["taxable_base"]
+    table.add_row(
+        Text("IRPF Taxable Base", style="label.dim"),
+        Text(format_brl(taxable_base), style="label.dim"),
+    )
+    if irpf_tax > 0:
+        table.add_row(
+            "IRPF (Lei 15.270/2025)",
+            Text(f"- {format_brl(irpf_tax)}", style="money.negative"),
+        )
+    else:
+        table.add_row(
+            "IRPF Status",
+            Text("✅ Tax Free", style="status.ok"),
+        )
 
     # ─ Bracket Warning (conditional)
     bracket_warn = str(results.get("bracket_warning", ""))
@@ -790,9 +1134,11 @@ def display_results(
         Text(format_brl(net), style="money.total"),
     )
 
-    # Effective tax burden percentage
+    # Effective tax burden percentage (now includes IRPF)
     if gross > 0:
-        total_taxes = results["inss_tax"] + results["estimated_das"]
+        total_taxes = (
+            results["inss_tax"] + results["estimated_das"] + results["irpf_tax"]
+        )
         tax_pct = total_taxes / gross
         bottom_table.add_row(
             Text("📉 Effective Tax Burden", style="label"),
@@ -988,7 +1334,8 @@ def main() -> None:
         2. Cross-session: Last inputs saved to ~/.rcal_state.json
 
     On launch, the app loads saved state and pre-fills defaults.
-    After each calculation, it saves the current inputs to disk.
+    After each calculation, it saves the current inputs (including
+    deduction settings) to disk.
     The user can clear the saved state via the menu.
     """
     console = Console(theme=RCAL_THEME)
@@ -1000,6 +1347,9 @@ def main() -> None:
     prev_month_year: str | None = None
     prev_revenue_usd: float | None = None
     prev_exchange_rate: float | None = None
+    prev_num_dependents: int = 0
+    prev_pgbl: float = 0.0
+    prev_alimony: float = 0.0
 
     try:
         # ── Header ──────────────────────────────────────────────
@@ -1020,6 +1370,9 @@ def main() -> None:
         month_year, revenue_usd, exchange_rate = collect_inputs(
             console, saved_state=saved_state
         )
+        num_dependents, pgbl, alimony_val = collect_deductions(
+            console, saved_state=saved_state
+        )
 
         while True:
             # ── Calculation with tactile spinner feedback ────────
@@ -1029,7 +1382,13 @@ def main() -> None:
                 spinner="dots",
                 spinner_style="brand",
             ):
-                results = calculate_taxes(revenue_usd, exchange_rate)
+                results = calculate_taxes(
+                    revenue_usd,
+                    exchange_rate,
+                    num_dependents=num_dependents,
+                    pgbl_contribution=pgbl,
+                    alimony=alimony_val,
+                )
                 time.sleep(0.35)
 
             # ── Display Results ─────────────────────────────────
@@ -1038,12 +1397,22 @@ def main() -> None:
             )
 
             # ── Persist state to disk ───────────────────────────
-            save_state(month_year, revenue_usd, exchange_rate)
+            save_state(
+                month_year,
+                revenue_usd,
+                exchange_rate,
+                num_dependents=num_dependents,
+                pgbl_contribution=pgbl,
+                alimony=alimony_val,
+            )
 
             # ── Remember state for next iteration ───────────────
             prev_month_year = month_year
             prev_revenue_usd = revenue_usd
             prev_exchange_rate = exchange_rate
+            prev_num_dependents = num_dependents
+            prev_pgbl = pgbl
+            prev_alimony = alimony_val
 
             # ── Ask what to do next ─────────────────────────────
             action = prompt_next_action(console)
@@ -1058,6 +1427,15 @@ def main() -> None:
                 # Re-enter everything (rate pre-filled from last run)
                 month_year, revenue_usd, exchange_rate = collect_inputs(
                     console, prev_exchange_rate=prev_exchange_rate
+                )
+                # Build a synthetic state dict so deduction defaults carry over
+                deduction_state = {
+                    "num_dependents": prev_num_dependents,
+                    "pgbl_contribution": prev_pgbl,
+                    "alimony": prev_alimony,
+                }
+                num_dependents, pgbl, alimony_val = collect_deductions(
+                    console, saved_state=deduction_state
                 )
 
             elif action == "revenue":
@@ -1076,6 +1454,15 @@ def main() -> None:
                 )
                 month_year = prev_month_year  # type: ignore[assignment]
                 exchange_rate = prev_exchange_rate  # type: ignore[assignment]
+                # Re-prompt deductions (Pró-labore may change with revenue)
+                deduction_state = {
+                    "num_dependents": prev_num_dependents,
+                    "pgbl_contribution": prev_pgbl,
+                    "alimony": prev_alimony,
+                }
+                num_dependents, pgbl, alimony_val = collect_deductions(
+                    console, saved_state=deduction_state
+                )
 
             elif action == "rate":
                 # Only change exchange rate — keep month + revenue
@@ -1094,6 +1481,15 @@ def main() -> None:
                 )
                 month_year = prev_month_year  # type: ignore[assignment]
                 revenue_usd = prev_revenue_usd  # type: ignore[assignment]
+                # Re-prompt deductions (Pró-labore may change with rate)
+                deduction_state = {
+                    "num_dependents": prev_num_dependents,
+                    "pgbl_contribution": prev_pgbl,
+                    "alimony": prev_alimony,
+                }
+                num_dependents, pgbl, alimony_val = collect_deductions(
+                    console, saved_state=deduction_state
+                )
 
             elif action == "clear":
                 # Wipe saved state from disk
@@ -1116,6 +1512,10 @@ def main() -> None:
                 month_year, revenue_usd, exchange_rate = collect_inputs(
                     console
                 )
+                # No saved state → deductions default to no
+                num_dependents, pgbl, alimony_val = collect_deductions(
+                    console
+                )
 
         # ── Goodbye ─────────────────────────────────────────────
         console.print()
@@ -1130,3 +1530,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -22,7 +22,7 @@ _AI Agents: Verify these values for the current operational year before executin
 | **Fator R Target**            | 28% (0.28)  | The ratio of payroll to revenue required for Anexo III.                                                       |
 | **INSS Tax Rate**             | 11% (0.11)  | Social security contribution levied on the _Pró-labore_.                                                      |
 | **Effective DAS (Bracket 1)** | ~3.054%     | The net tax rate for Anexo III (up to R$ 180k/year) after ISS, PIS, and COFINS export exemptions are applied. |
-| **IRPF Exemption Limit**      | R$ 5.000,00 | The monthly income threshold before Individual Income Tax is triggered.                                       |
+| **IRPF Dependent Deduction**  | R$ 189,59   | Monthly IRPF deduction per declared dependent.                                                                |
 
 ---
 
@@ -36,9 +36,11 @@ The core algorithm relies on this specific sequence of operations:
 4.  **Tax Calculations:**
     - `INSS Due` = `Ideal Pró-labore` \* `0.11`
     - `DAS Due` = `Gross Revenue (BRL)` \* `0.03054`
-5.  **Profit Distribution:** `Tax-Free Dividends` = `Gross Revenue (BRL)` - `Ideal Pró-labore` - `DAS Due`
-6.  **Net Take-Home:** `(Ideal Pró-labore - INSS Due)` + `Tax-Free Dividends`
-7.  **Effective Tax Burden:** `(INSS Due + DAS Due)` / `Gross Revenue (BRL)`
+5.  **IRPF Taxable Base:** `Ideal Pró-labore` - `INSS Due` - `Dependents` - `PGBL (capped)` - `Alimony`
+6.  **IRPF Calculation:** Apply the 2026 progressive table, then the Lei nº 15.270/2025 reducer (see §7).
+7.  **Profit Distribution:** `Tax-Free Dividends` = `Gross Revenue (BRL)` - `Ideal Pró-labore` - `DAS Due`
+8.  **Net Take-Home:** `(Ideal Pró-labore - INSS Due - IRPF)` + `Tax-Free Dividends`
+9.  **Effective Tax Burden:** `(INSS Due + DAS Due + IRPF)` / `Gross Revenue (BRL)`
 
 ---
 
@@ -61,20 +63,30 @@ Use this specific scenario to test the application's math engine during CI/CD pi
 - **Expected BRL Gross:** R$ 4.618,09
 - **Expected Pró-labore:** R$ 1.621,00 _(Because 28% of 4618.09 is 1293.06, which is below the minimum wage floor)._
 - **Expected INSS:** R$ 178,31
-- **Expected IRPF Status:** Tax Free
+- **Expected Taxable Base:** R$ 1.442,69 _(1621.00 - 178.31)._
+- **Expected IRPF:** R$ 0,00 _(Taxable base is below the R$ 2.428,80 exempt bracket)._
 
 ---
 
-## 6. Application Architecture (v2.1)
+## 6. Application Architecture (v3.0)
 
 _AI Agents: When modifying the codebase, respect these architectural constraints._
 
 ### Critical Invariants
 
-- The `calculate_taxes()` function signature and return dictionary shape **must not change** — 46 unit tests depend on it.
+- The `calculate_taxes()` function accepts `(revenue_usd, exchange_rate)` as positional args plus optional keyword args for deductions. All existing callers work without changes.
+- The return dictionary preserves all original keys and adds new IRPF keys: `irpf_tax`, `irpf_standard`, `irpf_reducer`, `taxable_base`, `irpf_deductions`.
+- 92 unit tests validate the mathematical engine.
 - All visual styling uses semantic tokens from `RCAL_THEME`. Do not use inline color strings.
-- Input validation is handled by `MonthYearPrompt` and `PositiveFloatPrompt` subclasses.
+- Input validation is handled by `MonthYearPrompt`, `PositiveFloatPrompt`, `NonNegativeIntPrompt`, and `NonNegativeFloatPrompt` subclasses.
 - State persistence functions (`load_state`, `save_state`, `clear_state`) must never raise exceptions — they are convenience features that fail silently.
+
+### Calculation Functions
+
+| Function | Purpose |
+|----------|---------|
+| `calculate_irpf_2026()` | Pure function: 3-step IRPF (table → reducer → final) |
+| `calculate_taxes()` | Core engine: Fator R + INSS + DAS + IRPF + dividends + net |
 
 ### UI Components
 
@@ -82,17 +94,18 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 |----------|---------|
 | `display_header()` | ASCII logo + subtitle + rule separator |
 | `collect_inputs()` | Validated prompts with 4-tier defaults: in-session → JSON → clock → none |
+| `collect_deductions()` | Optional IRPF deduction prompts with smart defaults from saved state |
 | `display_results()` | 3-zone output: input recap → tax breakdown → bottom line |
 | `display_footer()` | Rule-separated legal context sections |
-| `render_breakdown_bar()` | Proportional stacked bar chart (Unicode █) |
+| `render_breakdown_bar()` | Proportional stacked bar chart (Unicode █) with IRPF segment |
 | `prompt_next_action()` | Loop mode menu (all/revenue/rate/clear) |
 
 ### State Persistence
 
 | Function | Purpose |
 |----------|---------|
-| `load_state()` | Reads `~/.rcal_state.json`, returns dict or empty dict on error |
-| `save_state()` | Writes month/revenue/rate to JSON file, silently ignores failures |
+| `load_state()` | Reads `~/.rcal_state.json`, returns dict or empty dict on error. Backward compatible with pre-v3.0 files. |
+| `save_state()` | Writes month/revenue/rate + deduction values to JSON file, silently ignores failures |
 | `clear_state()` | Deletes the state file, returns True/False |
 
 ### Entry Points
@@ -104,6 +117,55 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 
 - `rich>=13.0.0` — the **only** external dependency
 - Python standard library: `json`, `pathlib`, `re`, `time`, `datetime`
+
+---
+
+## 7. 2026 IRPF Rules & Deductions
+
+_AI Agents: This section documents the IRPF (Individual Income Tax) calculation logic implemented in v3.0. Verify these values against the official sources below for the current operational year._
+
+### Official Sources
+
+- **Tributação de 2026 (Receita Federal):** [https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026](https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026)
+- **Lei nº 15.270/2025 (Isenção R$ 5 mil):** [https://www.gov.br/fazenda/pt-br/assuntos/noticias/2026/janeiro/receita-divulga-nova-tabela-do-irpf-com-as-mudancas-apos-isencao-para-quem-ganha-ate-r-5-mil](https://www.gov.br/fazenda/pt-br/assuntos/noticias/2026/janeiro/receita-divulga-nova-tabela-do-irpf-com-as-mudancas-apos-isencao-para-quem-ganha-ate-r-5-mil)
+- **Simulador Oficial Receita Federal:** [https://www27.receita.fazenda.gov.br/simulador-irpf](https://www27.receita.fazenda.gov.br/simulador-irpf)
+
+### Step 1 — Taxable Base (Base de Cálculo)
+
+`Taxable Base` = `Ideal Pró-labore` − `INSS` − `Dependents` − `PGBL (capped)` − `Alimony`
+
+| Deduction | Value | Notes |
+|-----------|-------|-------|
+| INSS | Automatic (11%) | Always subtracted; mandatory. |
+| Dependents | R$ 189,59 per dependent | User-provided count. |
+| PGBL | Up to 12% of Pró-labore | Private pension (Previdência Complementar). Capped by law. |
+| Alimony | Full amount | Pensão Alimentícia, court-ordered. |
+
+### Step 2 — Standard IRPF (Tabela Progressiva Mensal 2026)
+
+| Base de Cálculo Mensal | Alíquota | Dedução |
+|------------------------|----------|---------|
+| Até R$ 2.428,80 | Isento | — |
+| R$ 2.428,81 a R$ 2.826,65 | 7,5% | R$ 182,16 |
+| R$ 2.826,66 a R$ 3.751,05 | 15% | R$ 394,16 |
+| R$ 3.751,06 a R$ 4.664,68 | 22,5% | R$ 675,49 |
+| Acima de R$ 4.664,68 | 27,5% | R$ 908,73 |
+
+`Standard IRPF` = (`Taxable Base` × Alíquota) − Dedução
+
+### Step 3 — 2026 IRPF Reducer (Lei nº 15.270/2025)
+
+| Taxable Base | Reduction | Effect |
+|--------------|-----------|--------|
+| ≤ R$ 5.000,00 | Full exemption | Final IRPF = R$ 0,00 |
+| R$ 5.000,01 to R$ 7.350,00 | `R$ 978,62 − (0,133145 × Taxable Base)` | Phase-out zone: gradual reduction |
+| > R$ 7.350,00 | No reduction | Final IRPF = Standard IRPF |
+
+`Final IRPF` = max(`Standard IRPF` − `Reducer`, 0)
+
+### Step 4 — Updated Net Take-Home
+
+`Net Take-Home` = `Dividends` + (`Ideal Pró-labore` − `INSS` − `Final IRPF`)
 
 ---
 
