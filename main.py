@@ -6,18 +6,34 @@ This CLI tool calculates the optimal Pró-labore (administrator salary),
 taxes, and dividends for a Brazilian tech company that exports services
 under the Simples Nacional regime (Anexo III).
 
+Target Audience:
+    Brazilian micro and small businesses (ME/EPP) in the tech sector
+    (e.g., software development, website planning/hosting — LC 116/03,
+    Sub-item 01.08) that export services internationally.
+
+Export Exemptions:
+    Under Brazilian law, the export of services — where the client is
+    abroad and the result of the service is verified abroad — is exempt
+    from municipal ISSQN and federal PIS/COFINS taxes. The DAS rate used
+    in this tool (~3.054%) already reflects those exemptions removed from
+    the standard Anexo III nominal rate.
+
 Key Concept — Fator R:
     The "Fator R" is a ratio defined by Brazilian tax law that determines
     which tax annex (table) applies to a company under Simples Nacional.
-    
+
     Fator R = Payroll Expenses (last 12 months) / Gross Revenue (last 12 months)
-    
+
     If Fator R >= 0.28 (28%), the company is taxed under Anexo III (lower rates,
     starting at ~6%). If Fator R < 0.28, the company falls into Anexo V (higher
     rates, starting at ~15.5%).
-    
+
     Therefore, paying a minimum Pró-labore that keeps Fator R >= 28% is a
     common and legal tax-optimization strategy for service-exporting companies.
+
+See Also:
+    docs/AI_REFERENCE_DOC.md — The canonical source of truth for business
+    logic, edge cases, and validation test cases.
 
 Author: RCal Contributors
 License: MIT
@@ -36,13 +52,25 @@ from rich import box
 
 LEGAL_MINIMUM_WAGE: float = 1621.00
 """The Brazilian federal minimum wage for 2026 (R$ 1.621,00).
-The Pró-labore cannot be lower than this value."""
+The Pró-labore cannot be lower than this value.
+
+Note: Some states (e.g., Santa Catarina) have higher regional minimum
+wages (e.g., R$ 2.106,00 for tech workers in Faixa 4). However, for
+the sole purpose of a business owner's Pró-labore / INSS contribution,
+the Federal minimum wage is the legally accepted floor. This tool
+defaults to the Federal level to optimize tax savings."""
 
 DAS_TAX_RATE: float = 0.03054
 """Effective DAS (Documento de Arrecadação do Simples Nacional) rate
-for Anexo III, first bracket. This is the simplified monthly tax
-applied to gross revenue. Actual rate depends on accumulated
-revenue over the last 12 months — 3.054% is the initial bracket."""
+for Anexo III, Bracket 1 (gross annual revenue up to R$ 180.000,00).
+
+This is the NET tax rate after ISS, PIS, and COFINS export exemptions
+are removed from the nominal Anexo III rate (~6%). It is applied as a
+percentage of monthly gross revenue.
+
+IMPORTANT: If accumulated annual revenue exceeds R$ 180k, the effective
+rate must be dynamically calculated using the Receita Federal's
+progressive formula: ((RBT12 * Nominal Rate) - Deductible) / RBT12."""
 
 INSS_TAX_RATE: float = 0.11
 """INSS (Instituto Nacional do Seguro Social) contribution rate
@@ -118,19 +146,24 @@ def calculate_taxes(
     if ideal_pro_labore > IRPF_LIMIT:
         irpf_status: str = (
             "⚠️  IRPF Triggered! Pró-labore exceeds "
-            f"R$ {IRPF_LIMIT:,.2f}".replace(",", ".").replace(".", ",", 1)
-            .replace(",", ".")
-            + ". Apply deductions."
+            f"{format_brl(IRPF_LIMIT)}. Apply deductions."
         )
     else:
         irpf_status = "✅ Tax Free"
 
-    # Properly format IRPF status message
-    if ideal_pro_labore > IRPF_LIMIT:
-        irpf_status = (
-            "⚠️  IRPF Triggered! Pró-labore exceeds "
-            "R$ 5.000,00. Apply deductions."
+    # Step 6b: Bracket 1 ceiling warning
+    # The hardcoded DAS rate assumes annual revenue <= R$ 180.000,00.
+    # Warn the user if their monthly revenue suggests they may exceed this.
+    bracket_1_ceiling: float = 180_000.00
+    estimated_annual: float = gross_revenue_brl * 12
+    if estimated_annual > bracket_1_ceiling:
+        bracket_warning: str = (
+            f"⚠️  Estimated annual revenue ({format_brl(estimated_annual)}) "
+            f"exceeds Bracket 1 ceiling ({format_brl(bracket_1_ceiling)}). "
+            "The effective DAS rate may be higher — consult your accountant."
         )
+    else:
+        bracket_warning = ""
 
     # Step 7: Available dividends (distributed tax-free to the partner)
     # Dividends = Revenue minus salary minus Simples Nacional tax
@@ -147,6 +180,7 @@ def calculate_taxes(
         "inss_tax": inss_tax,
         "estimated_das": estimated_das,
         "irpf_status": irpf_status,
+        "bracket_warning": bracket_warning,
         "available_dividends": available_dividends,
         "total_net_take_home": total_net_take_home,
     }
@@ -245,6 +279,15 @@ def display_results(
     irpf_style = "bold red" if "⚠️" in irpf else "bold green"
     table.add_row("IRPF Status", irpf, style=irpf_style)
 
+    # Row 6b: Bracket Warning (only if applicable)
+    bracket_warn = str(results.get("bracket_warning", ""))
+    if bracket_warn:
+        table.add_row(
+            "📈 Bracket Warning",
+            bracket_warn,
+            style="bold yellow",
+        )
+
     # Row 7: Available Dividends
     table.add_row(
         "📦 Available Dividends",
@@ -277,6 +320,13 @@ def display_results(
             "company in Anexo III (lower tax rates) instead of Anexo V. "
             "The ideal Pró-labore above is the minimum needed to maintain "
             "this threshold while respecting the legal minimum wage.\n\n",
+            "dim white",
+        ),
+        ("💱 Exchange Rate Note: ", "bold cyan"),
+        (
+            "Per Brazilian tax law, foreign income must be converted using "
+            "the BRL exchange rate on the date the funds are made available "
+            "or the invoice is issued — not the withdrawal date.\n\n",
             "dim white",
         ),
         ("⚖️  Disclaimer: ", "bold yellow"),

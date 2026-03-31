@@ -64,7 +64,7 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/RCal.git
+git clone https://github.com/MAlkabbani/RCal.git
 cd RCal
 ```
 
@@ -154,10 +154,14 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 ```
 RCal/
 ├── main.py              # Main application script
+├── test_main.py         # Unit tests (Fator R validation)
 ├── requirements.txt     # Python dependencies
 ├── README.md            # This file
+├── .gitignore           # Git ignore rules
 └── docs/
-    └── initial-prompt.md # Original specification
+    ├── initial-prompt.md    # Original specification
+    ├── AI_REFERENCE_DOC.md  # AI agent tax logic reference
+    └── walkthrough.md       # Project walkthrough
 ```
 
 ---
