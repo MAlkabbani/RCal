@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────
+# rcal — One-command launcher for the RCal Tax Calculator
+#
+# This script handles the entire setup and execution cycle:
+#   1. Locates the correct Python 3 interpreter
+#   2. Creates a virtual environment if one doesn't exist
+#   3. Installs dependencies if they're missing
+#   4. Launches the application
+#
+# Usage:
+#   ./rcal              # from the project directory
+#   ~/RCal/RCal/rcal    # from anywhere (absolute path)
+#
+# The script is idempotent — safe to run repeatedly. After the
+# first run (which takes ~5 seconds for setup), subsequent runs
+# launch instantly.
+# ──────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+# ── Resolve the directory where this script lives ────────────────
+# This ensures the script works whether called via ./rcal, an
+# absolute path, or a symlink.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+VENV_DIR="$SCRIPT_DIR/.venv"
+REQUIREMENTS="$SCRIPT_DIR/requirements.txt"
+MAIN_SCRIPT="$SCRIPT_DIR/main.py"
+PYTHON=""
+
+# ── Find a working Python 3 interpreter ──────────────────────────
+# macOS ships python3 but not python. We check both, preferring
+# python3 to avoid accidentally using a Python 2 installation.
+find_python() {
+    if command -v python3 &>/dev/null; then
+        PYTHON="python3"
+    elif command -v python &>/dev/null; then
+        # Verify it's actually Python 3
+        local ver
+        ver="$(python --version 2>&1)"
+        if [[ "$ver" == *"Python 3"* ]]; then
+            PYTHON="python"
+        fi
+    fi
+
+    if [[ -z "$PYTHON" ]]; then
+        echo ""
+        echo "  ❌  Python 3 not found."
+        echo ""
+        echo "  Install it with Homebrew:"
+        echo "    brew install python"
+        echo ""
+        exit 1
+    fi
+}
+
+# ── Create the virtual environment if missing ────────────────────
+ensure_venv() {
+    if [[ ! -d "$VENV_DIR" ]]; then
+        echo ""
+        echo "  ⚙️   First run — setting up virtual environment..."
+        echo ""
+        "$PYTHON" -m venv "$VENV_DIR"
+        echo "  ✅  Virtual environment created."
+    fi
+}
+
+# ── Install dependencies if missing ─────────────────────────────
+ensure_deps() {
+    # Quick check: try importing rich. If it fails, install.
+    if ! "$VENV_DIR/bin/python" -c "import rich" &>/dev/null; then
+        echo "  📦  Installing dependencies..."
+        "$VENV_DIR/bin/pip" install --quiet --upgrade pip
+        "$VENV_DIR/bin/pip" install --quiet -r "$REQUIREMENTS"
+        echo "  ✅  Dependencies installed."
+        echo ""
+    fi
+}
+
+# ── Main ─────────────────────────────────────────────────────────
+find_python
+ensure_venv
+ensure_deps
+
+# Launch the application using the venv's Python interpreter
+# Pass through any command-line arguments (future-proofing)
+exec "$VENV_DIR/bin/python" "$MAIN_SCRIPT" "$@"

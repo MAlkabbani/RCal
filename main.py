@@ -39,9 +39,11 @@ Author: RCal Contributors
 License: MIT
 """
 
+import json
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 
 from rich import box
 from rich.align import Align
@@ -146,6 +148,96 @@ IRPF_LIMIT: float = 5000.00
 """Monthly Pró-labore threshold above which IRPF (Imposto de Renda
 Pessoa Física — personal income tax) withholding applies.
 Below this amount, the income falls within the tax-exempt bracket."""
+
+STATE_FILE: Path = Path.home() / ".rcal_state.json"
+"""Path to the persistent state file.
+
+Stores the user's last-used inputs (month, revenue, exchange rate)
+as JSON so they can be pre-filled on the next application launch.
+Located in the user's home directory as a hidden file.
+
+The file is human-readable and can be manually edited or deleted.
+Use the in-app '[4] Clear Memory' option to wipe it cleanly."""
+
+
+# ──────────────────────────────────────────────────────────────────
+# State Persistence — Cross-Session Memory
+#
+# RCal remembers the user's last inputs between sessions using a
+# simple JSON file in the home directory. This means returning
+# users get their previous values pre-filled as smart defaults.
+# ──────────────────────────────────────────────────────────────────
+
+
+def load_state() -> dict[str, float | str]:
+    """Load the last-used inputs from the persistent state file.
+
+    Reads ~/.rcal_state.json and returns a dictionary with keys:
+        - month_year (str): e.g. "03/2026"
+        - revenue_usd (float): e.g. 883.0
+        - exchange_rate (float): e.g. 5.23
+
+    If the file doesn't exist, is corrupted, or has an unexpected
+    format, returns an empty dict so the app falls back to fresh
+    prompts. This function never raises exceptions.
+
+    Returns:
+        Dictionary with saved state, or empty dict on any error.
+    """
+    try:
+        if STATE_FILE.exists():
+            data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except (json.JSONDecodeError, OSError, ValueError):
+        pass
+    return {}
+
+
+def save_state(
+    month_year: str,
+    revenue_usd: float,
+    exchange_rate: float,
+) -> None:
+    """Save the current inputs to the persistent state file.
+
+    Writes to ~/.rcal_state.json as human-readable JSON.
+    Silently ignores write failures (e.g., permissions issues)
+    since persistence is a convenience feature, not critical.
+
+    Args:
+        month_year: The reference month/year string.
+        revenue_usd: Monthly revenue in USD.
+        exchange_rate: USD → BRL exchange rate.
+    """
+    state = {
+        "month_year": month_year,
+        "revenue_usd": revenue_usd,
+        "exchange_rate": exchange_rate,
+    }
+    try:
+        STATE_FILE.write_text(
+            json.dumps(state, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def clear_state() -> bool:
+    """Delete the persistent state file.
+
+    Returns:
+        True if the file was deleted, False if it didn't exist
+        or couldn't be removed.
+    """
+    try:
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+            return True
+    except OSError:
+        pass
+    return False
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -468,24 +560,36 @@ def display_header(console: Console) -> None:
 def collect_inputs(
     console: Console,
     prev_exchange_rate: float | None = None,
+    saved_state: dict[str, float | str] | None = None,
 ) -> tuple[str, float, float]:
     """Collect and validate all three user inputs with smart defaults.
 
-    On the first run, all fields are prompted fresh. On subsequent
-    runs (when prev_exchange_rate is provided), the exchange rate
-    is pre-filled from the previous session since it rarely changes
-    within a single usage session.
+    On the first run, saved state from the JSON file is used to
+    pre-fill defaults. On subsequent runs within the same session,
+    prev_exchange_rate takes priority.
+
+    Priority order for defaults:
+        1. prev_exchange_rate (in-session memory, highest priority)
+        2. saved_state (cross-session JSON file)
+        3. System clock for month/year
+        4. No default (user must enter fresh)
 
     Args:
         console: Rich console instance for output.
-        prev_exchange_rate: Exchange rate from previous calculation,
-            or None for the first run.
+        prev_exchange_rate: Exchange rate from previous calculation
+            within this session, or None for the first run.
+        saved_state: Dictionary loaded from ~/.rcal_state.json,
+            or None if no saved state exists.
 
     Returns:
         Tuple of (month_year, revenue_usd, exchange_rate).
     """
-    # Smart default: current month/year
-    default_month_year = datetime.now().strftime("%m/%Y")
+    saved = saved_state or {}
+
+    # Smart default: saved month or current month/year
+    default_month_year = str(
+        saved.get("month_year", datetime.now().strftime("%m/%Y"))
+    )
 
     month_year: str = MonthYearPrompt.ask(
         "[prompt.label]📅 Current Month/Year[/] [prompt.hint](MM/YYYY)[/]",
@@ -493,17 +597,31 @@ def collect_inputs(
         default=default_month_year,
     )
 
-    revenue_usd: float = PositiveFloatPrompt.ask(
-        "[prompt.label]💵 Monthly Revenue in USD[/]",
-        console=console,
-    )
+    # Revenue: use saved default if available
+    saved_revenue = saved.get("revenue_usd")
+    if saved_revenue is not None and prev_exchange_rate is None:
+        revenue_usd: float = PositiveFloatPrompt.ask(
+            "[prompt.label]💵 Monthly Revenue in USD[/]",
+            console=console,
+            default=float(saved_revenue),
+        )
+    else:
+        revenue_usd = PositiveFloatPrompt.ask(
+            "[prompt.label]💵 Monthly Revenue in USD[/]",
+            console=console,
+        )
 
-    # Pre-fill exchange rate from previous run if available
-    if prev_exchange_rate is not None:
+    # Exchange rate: in-session memory > saved state > no default
+    saved_rate = saved.get("exchange_rate")
+    default_rate = prev_exchange_rate
+    if default_rate is None and saved_rate is not None:
+        default_rate = float(saved_rate)
+
+    if default_rate is not None:
         exchange_rate: float = PositiveFloatPrompt.ask(
             "[prompt.label]💱 USD → BRL Exchange Rate[/]",
             console=console,
-            default=prev_exchange_rate,
+            default=default_rate,
         )
     else:
         exchange_rate = PositiveFloatPrompt.ask(
@@ -844,16 +962,17 @@ def prompt_next_action(console: Console) -> str | None:
     console.print(Text("  [1]  All inputs (month, revenue, rate)", style="label"))
     console.print(Text("  [2]  Only revenue (keep current rate)", style="label"))
     console.print(Text("  [3]  Only exchange rate (keep current revenue)", style="label"))
+    console.print(Text("  [4]  🗑️  Clear memory (wipe saved state)", style="label.dim"))
     console.print()
 
     choice = Prompt.ask(
         "[prompt.label]  Your choice[/]",
         console=console,
-        choices=["1", "2", "3"],
+        choices=["1", "2", "3", "4"],
         default="1",
     )
 
-    return {"1": "all", "2": "revenue", "3": "rate"}[choice]
+    return {"1": "all", "2": "revenue", "3": "rate", "4": "clear"}[choice]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -864,11 +983,18 @@ def prompt_next_action(console: Console) -> str | None:
 def main() -> None:
     """Entry point — collect user input, calculate, display, and loop.
 
-    Implements a stateful interactive loop where the exchange rate
-    is remembered between runs. The user chooses what to recalculate
-    each iteration, making multi-scenario comparison effortless.
+    Implements a stateful interactive loop with two layers of memory:
+        1. In-session: Values remembered between loop iterations
+        2. Cross-session: Last inputs saved to ~/.rcal_state.json
+
+    On launch, the app loads saved state and pre-fills defaults.
+    After each calculation, it saves the current inputs to disk.
+    The user can clear the saved state via the menu.
     """
     console = Console(theme=RCAL_THEME)
+
+    # ── Load cross-session state ────────────────────────────────
+    saved_state = load_state()
 
     # State carried between loop iterations
     prev_month_year: str | None = None
@@ -879,8 +1005,21 @@ def main() -> None:
         # ── Header ──────────────────────────────────────────────
         display_header(console)
 
+        # Show saved state indicator if available
+        if saved_state:
+            console.print(
+                Text(
+                    "  💾 Previous session restored — "
+                    "your last values are pre-filled as defaults.",
+                    style="label.dim",
+                )
+            )
+            console.print()
+
         # ── First Run: Collect all inputs ───────────────────────
-        month_year, revenue_usd, exchange_rate = collect_inputs(console)
+        month_year, revenue_usd, exchange_rate = collect_inputs(
+            console, saved_state=saved_state
+        )
 
         while True:
             # ── Calculation with tactile spinner feedback ────────
@@ -897,6 +1036,9 @@ def main() -> None:
             display_results(
                 console, month_year, revenue_usd, exchange_rate, results
             )
+
+            # ── Persist state to disk ───────────────────────────
+            save_state(month_year, revenue_usd, exchange_rate)
 
             # ── Remember state for next iteration ───────────────
             prev_month_year = month_year
@@ -952,6 +1094,28 @@ def main() -> None:
                 )
                 month_year = prev_month_year  # type: ignore[assignment]
                 revenue_usd = prev_revenue_usd  # type: ignore[assignment]
+
+            elif action == "clear":
+                # Wipe saved state from disk
+                if clear_state():
+                    console.print(
+                        Text(
+                            "  🗑️  Memory cleared! Saved state wiped.",
+                            style="status.ok",
+                        )
+                    )
+                else:
+                    console.print(
+                        Text(
+                            "  ℹ️  No saved state to clear.",
+                            style="label.dim",
+                        )
+                    )
+                console.print()
+                # Re-enter all inputs from scratch (no defaults)
+                month_year, revenue_usd, exchange_rate = collect_inputs(
+                    console
+                )
 
         # ── Goodbye ─────────────────────────────────────────────
         console.print()

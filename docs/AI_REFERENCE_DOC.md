@@ -65,28 +65,45 @@ Use this specific scenario to test the application's math engine during CI/CD pi
 
 ---
 
-## 6. Application Architecture (v2.0)
+## 6. Application Architecture (v2.1)
 
 _AI Agents: When modifying the codebase, respect these architectural constraints._
 
 ### Critical Invariants
-- The `calculate_taxes()` function signature and return dictionary shape **must not change** — 18 unit tests depend on it.
+
+- The `calculate_taxes()` function signature and return dictionary shape **must not change** — 46 unit tests depend on it.
 - All visual styling uses semantic tokens from `RCAL_THEME`. Do not use inline color strings.
 - Input validation is handled by `MonthYearPrompt` and `PositiveFloatPrompt` subclasses.
+- State persistence functions (`load_state`, `save_state`, `clear_state`) must never raise exceptions — they are convenience features that fail silently.
 
 ### UI Components
+
 | Function | Purpose |
 |----------|---------|
 | `display_header()` | ASCII logo + subtitle + rule separator |
-| `collect_inputs()` | Validated prompts with smart defaults and exchange rate memory |
+| `collect_inputs()` | Validated prompts with 4-tier defaults: in-session → JSON → clock → none |
 | `display_results()` | 3-zone output: input recap → tax breakdown → bottom line |
 | `display_footer()` | Rule-separated legal context sections |
 | `render_breakdown_bar()` | Proportional stacked bar chart (Unicode █) |
-| `prompt_next_action()` | Loop mode menu (all/revenue/rate) |
+| `prompt_next_action()` | Loop mode menu (all/revenue/rate/clear) |
+
+### State Persistence
+
+| Function | Purpose |
+|----------|---------|
+| `load_state()` | Reads `~/.rcal_state.json`, returns dict or empty dict on error |
+| `save_state()` | Writes month/revenue/rate to JSON file, silently ignores failures |
+| `clear_state()` | Deletes the state file, returns True/False |
+
+### Entry Points
+
+- `./rcal` — Bash launcher (auto-venv, auto-install, auto-run)
+- `python3 main.py` — Direct execution (requires manual venv activation)
 
 ### Dependencies
+
 - `rich>=13.0.0` — the **only** external dependency
-- Python standard library: `re`, `time`, `datetime`
+- Python standard library: `json`, `pathlib`, `re`, `time`, `datetime`
 
 ---
 

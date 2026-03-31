@@ -10,14 +10,23 @@ as part of CI/CD pipelines to catch regressions in tax logic.
 """
 
 import unittest
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
 from main import (
     calculate_taxes,
+    clear_state,
     format_brl,
     format_pct,
+    load_state,
     render_breakdown_bar,
+    save_state,
     MonthYearPrompt,
     PositiveFloatPrompt,
     LEGAL_MINIMUM_WAGE,
+    STATE_FILE,
 )
 from rich.prompt import InvalidResponse
 
@@ -284,6 +293,77 @@ class TestBreakdownBar(unittest.TestCase):
         }
         bar = render_breakdown_bar(results)
         self.assertIn("No revenue", bar.plain)
+
+
+class TestStatePersistence(unittest.TestCase):
+    """Test the cross-session JSON state persistence.
+
+    Uses a temporary directory to isolate tests from the user's
+    real ~/.rcal_state.json file.
+    """
+
+    def setUp(self) -> None:
+        """Create a temporary state file path for each test."""
+        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_state = Path(self.tmp_dir) / ".rcal_state.json"
+        self.patcher = patch("main.STATE_FILE", self.tmp_state)
+        self.patcher.start()
+
+    def tearDown(self) -> None:
+        """Clean up temporary files."""
+        self.patcher.stop()
+        if self.tmp_state.exists():
+            self.tmp_state.unlink()
+        Path(self.tmp_dir).rmdir()
+
+    def test_save_creates_file(self) -> None:
+        """save_state() should create the JSON file."""
+        self.assertFalse(self.tmp_state.exists())
+        save_state("03/2026", 883.0, 5.23)
+        self.assertTrue(self.tmp_state.exists())
+
+    def test_save_load_roundtrip(self) -> None:
+        """Data should survive a save → load cycle."""
+        save_state("03/2026", 883.0, 5.23)
+        state = load_state()
+        self.assertEqual(state["month_year"], "03/2026")
+        self.assertAlmostEqual(state["revenue_usd"], 883.0)
+        self.assertAlmostEqual(state["exchange_rate"], 5.23)
+
+    def test_load_missing_file(self) -> None:
+        """Loading from a non-existent file should return empty dict."""
+        state = load_state()
+        self.assertEqual(state, {})
+
+    def test_load_corrupted_file(self) -> None:
+        """Loading from a corrupted JSON file should return empty dict."""
+        self.tmp_state.write_text("not valid json {{{", encoding="utf-8")
+        state = load_state()
+        self.assertEqual(state, {})
+
+    def test_clear_deletes_file(self) -> None:
+        """clear_state() should delete the state file."""
+        save_state("03/2026", 883.0, 5.23)
+        self.assertTrue(self.tmp_state.exists())
+        result = clear_state()
+        self.assertTrue(result)
+        self.assertFalse(self.tmp_state.exists())
+
+    def test_clear_missing_file(self) -> None:
+        """clear_state() on missing file should return False."""
+        result = clear_state()
+        self.assertFalse(result)
+
+    def test_state_file_is_valid_json(self) -> None:
+        """The saved file should be valid, human-readable JSON."""
+        save_state("04/2026", 5000.0, 5.75)
+        raw = self.tmp_state.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        self.assertIn("month_year", data)
+        self.assertIn("revenue_usd", data)
+        self.assertIn("exchange_rate", data)
+        # Should be indented (human-readable)
+        self.assertIn("\n", raw)
 
 
 if __name__ == "__main__":

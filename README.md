@@ -58,12 +58,7 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 
 ---
 
-## 🚀 Quick Start (macOS M1/M2/M3)
-
-### Prerequisites
-
-- **Python 3.10+** (comes pre-installed on macOS or install via [Homebrew](https://brew.sh))
-- **pip** (Python package manager)
+## 🚀 Quick Start (macOS)
 
 ### 1. Clone the Repository
 
@@ -72,28 +67,35 @@ git clone https://github.com/MAlkabbani/RCal.git
 cd RCal
 ```
 
-### 2. Create a Virtual Environment (Recommended)
+### 2. Run (One Command)
+
+```bash
+./rcal
+```
+
+That's it! The `rcal` launcher automatically:
+- Finds your Python 3 installation
+- Creates a virtual environment (first run only)
+- Installs dependencies (first run only)
+- Launches the calculator
+
+> **💡 First run** takes ~5 seconds for setup. Subsequent runs launch instantly.
+
+### Alternative: Manual Setup
+
+If you prefer to manage the environment yourself:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-### 3. Install Dependencies
-
-```bash
 pip install -r requirements.txt
-```
-
-### 4. Run the Calculator
-
-```bash
 python3 main.py
 ```
 
-### 5. Run Tests
+### Run Tests
 
 ```bash
+source .venv/bin/activate
 python3 -m unittest test_main -v
 ```
 
@@ -159,11 +161,21 @@ When you run the tool, it will interactively prompt you for:
 ### Loop Mode
 
 After each calculation, you can:
+
 - **[1] Change all inputs** — re-enter month, revenue, and rate (rate pre-filled)
 - **[2] Change only revenue** — keep current month and exchange rate
 - **[3] Change only exchange rate** — keep current month and revenue
+- **[4] Clear memory** — wipe saved state and start fresh
 
 This makes comparing multiple scenarios effortless.
+
+### 💾 Memory
+
+RCal **remembers your last inputs** between sessions. When you relaunch, your previous month, revenue, and exchange rate are pre-filled as defaults.
+
+- State is stored in `~/.rcal_state.json` (human-readable JSON)
+- Use **[4] Clear memory** from the menu to wipe it
+- Or manually delete: `rm ~/.rcal_state.json`
 
 ---
 
@@ -186,10 +198,11 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 
 ## 🏗️ Project Structure
 
-```
+```text
 RCal/
+├── rcal                 # One-command launcher (bash)
 ├── main.py              # Main application (UI + calculation engine)
-├── test_main.py         # Unit tests (18 tests, 4 test classes)
+├── test_main.py         # Unit tests (46 tests, 9 test classes)
 ├── requirements.txt     # Python dependencies (rich>=13.0.0)
 ├── README.md            # This file
 ├── CHANGELOG.md         # Version history and changes

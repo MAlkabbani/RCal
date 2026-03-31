@@ -4,6 +4,36 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [2.1.0] — 2026-03-31
+
+### 🚀 One-Command Launcher & Cross-Session Memory
+
+Quality-of-life improvements: launch with a single command and never re-enter the same values twice.
+
+### Added
+
+- **`rcal` Bash Launcher** — Executable script that auto-detects Python 3, creates a virtual environment if missing, installs dependencies, and launches the app. Just type `./rcal`.
+- **Cross-Session Memory** — `load_state()`, `save_state()`, `clear_state()` functions persisting last-used inputs to `~/.rcal_state.json`. Returning users get pre-filled defaults automatically.
+- **[4] Clear Memory** — New loop menu option to wipe saved state and start fresh.
+- **Session Restored Indicator** — "💾 Previous session restored" message on launch when saved state exists.
+
+### Changed
+
+- **`collect_inputs()`** — Now accepts `saved_state` parameter with 4-tier default priority: in-session memory → JSON file → system clock → no default.
+- **`prompt_next_action()`** — Extended from 3 to 4 choices (added "clear" action).
+- **`main()`** — Loads state on launch, saves after each calculation, handles clear action.
+- **README.md** — New Quick Start with `./rcal` launcher, added Memory section, updated project structure.
+- **CHANGELOG.md** — Added this version entry.
+- **test_main.py** — Expanded from 39 to 46 tests. Added `TestStatePersistence` (7 tests covering save/load/clear roundtrip, corrupted file handling, missing file fallback).
+
+### Technical
+
+- **No new dependencies** — uses `json` and `pathlib` from Python stdlib
+- **New constant** — `STATE_FILE: Path = Path.home() / ".rcal_state.json"`
+- **New imports** — `json`, `pathlib.Path` (stdlib)
+
+---
+
 ## [2.0.0] — 2026-03-31
 
 ### 🎨 UI/UX Complete Overhaul
@@ -38,7 +68,7 @@ A full redesign of the terminal experience, transforming RCal from a single-run 
 - **README.md** — Complete rewrite with updated features list, new sample output matching ASCII header + 3-zone layout, loop mode documentation, corrected commands to `python3`, added test running instructions.
 - **docs/walkthrough.md** — Rewritten with version history, v2.0 feature details, architecture notes.
 - **docs/AI_REFERENCE_DOC.md** — Added Net Take-Home and Effective Tax Burden to math engine (§3), negative dividends edge case (§4), new §6 documenting v2.0 architecture constraints and UI component inventory.
-- **test_main.py** — Expanded from 18 to 32 tests. Added `TestFormatPct` (4 tests), `TestMonthYearPrompt` (8 tests), `TestPositiveFloatPrompt` (6 tests), `TestBreakdownBar` (3 tests).
+- **test_main.py** — Expanded from 18 to 39 tests. Added `TestFormatPct` (4 tests), `TestMonthYearPrompt` (8 tests), `TestPositiveFloatPrompt` (6 tests), `TestBreakdownBar` (3 tests).
 
 ### Technical
 
