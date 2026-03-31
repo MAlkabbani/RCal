@@ -39,12 +39,73 @@ Author: RCal Contributors
 License: MIT
 """
 
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
-from rich.prompt import Prompt, FloatPrompt
+import re
+import time
+from datetime import datetime
+
 from rich import box
+from rich.align import Align
+from rich.columns import Columns
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.prompt import Confirm, FloatPrompt, InvalidResponse, Prompt
+from rich.rule import Rule
+from rich.table import Table
+from rich.text import Text
+from rich.theme import Theme
+from rich.traceback import install as install_rich_traceback
+
+# ──────────────────────────────────────────────────────────────────
+# Rich Traceback Handler — beautiful errors for unexpected crashes
+# ──────────────────────────────────────────────────────────────────
+install_rich_traceback(show_locals=True)
+
+# ──────────────────────────────────────────────────────────────────
+# Design System — Consistent theme for the entire application
+#
+# All visual styles are defined here as semantic tokens. This makes
+# the entire palette changeable from a single location and ensures
+# every component shares a cohesive visual identity.
+# ──────────────────────────────────────────────────────────────────
+
+RCAL_THEME = Theme(
+    {
+        # ─ Primary brand
+        "brand": "bold #00b4d8",          # vivid cyan — the "RCal blue"
+        "brand.dim": "#0077b6",           # darker accent
+        # ─ Semantic money tokens
+        "money.positive": "bold #2ec4b6", # teal-green for income
+        "money.negative": "bold #e63946", # warm red for deductions
+        "money.highlight": "bold #f4a261",  # amber for key results
+        "money.total": "bold bright_white on #264653",  # grand total
+        # ─ Text hierarchy
+        "label": "#adb5bd",               # muted gray for row labels
+        "label.dim": "dim #6c757d",       # secondary info
+        "heading": "bold bright_white",
+        # ─ Status indicators
+        "status.ok": "bold #2ec4b6",
+        "status.warn": "bold #f4a261",
+        "status.danger": "bold #e63946",
+        # ─ Surfaces & borders
+        "border.primary": "#00b4d8",
+        "border.dim": "#264653",
+        # ─ Input prompts
+        "prompt.label": "bold #00b4d8",
+        "prompt.hint": "dim #6c757d",
+    }
+)
+
+# ──────────────────────────────────────────────────────────────────
+# ASCII Logo — Visually attractive branded header
+# ──────────────────────────────────────────────────────────────────
+
+LOGO = """\
+  ██████╗   ██████╗  █████╗  ██╗
+  ██╔══██╗ ██╔════╝ ██╔══██╗ ██║
+  ██████╔╝ ██║      ███████║ ██║
+  ██╔══██╗ ██║      ██╔══██║ ██║
+  ██║  ██║ ╚██████╗ ██║  ██║ ███████╗
+  ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝"""
 
 # ──────────────────────────────────────────────────────────────────
 # Tax Constants for 2026
@@ -87,14 +148,89 @@ Pessoa Física — personal income tax) withholding applies.
 Below this amount, the income falls within the tax-exempt bracket."""
 
 
+# ──────────────────────────────────────────────────────────────────
+# Custom Validated Prompts
+# ──────────────────────────────────────────────────────────────────
+
+
+class MonthYearPrompt(Prompt):
+    """Prompt that validates MM/YYYY format with valid month range.
+
+    Automatically retries on invalid input using Rich's built-in
+    InvalidResponse mechanism — no manual while loops needed.
+    """
+
+    def process_response(self, value: str) -> str:
+        """Validate month/year format and range.
+
+        Args:
+            value: User-entered string.
+
+        Returns:
+            Validated month/year string.
+
+        Raises:
+            InvalidResponse: If format or month range is invalid.
+        """
+        value = value.strip()
+        if not re.match(r"^\d{2}/\d{4}$", value):
+            raise InvalidResponse(
+                "[status.danger]  ✗ Please enter a valid month/year "
+                "(format: MM/YYYY, e.g. 03/2026).[/]"
+            )
+        month = int(value[:2])
+        if not 1 <= month <= 12:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Month must be between 01 and 12.[/]"
+            )
+        return value
+
+
+class PositiveFloatPrompt(FloatPrompt):
+    """FloatPrompt that rejects zero and negative values.
+
+    Ensures the user cannot enter invalid financial amounts
+    that would break the calculation engine.
+    """
+
+    def process_response(self, value: str) -> float:
+        """Validate that the entered value is a positive number.
+
+        Args:
+            value: User-entered string.
+
+        Returns:
+            Validated positive float.
+
+        Raises:
+            InvalidResponse: If value is not a positive number.
+        """
+        try:
+            result = float(value)
+        except ValueError:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Please enter a valid number.[/]"
+            )
+        if result <= 0:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Value must be greater than zero.[/]"
+            )
+        return result
+
+
+# ──────────────────────────────────────────────────────────────────
+# Formatting Utilities
+# ──────────────────────────────────────────────────────────────────
+
+
 def format_brl(value: float) -> str:
     """Format a float as Brazilian Reais currency string.
-    
+
     Follows the Brazilian convention:
         - Thousands separated by dots
         - Decimal separated by comma
         - Prefixed with R$
-    
+
     Example:
         >>> format_brl(12345.67)
         'R$ 12.345,67'
@@ -106,22 +242,125 @@ def format_brl(value: float) -> str:
     return f"R$ {formatted}"
 
 
+def format_pct(value: float) -> str:
+    """Format a float ratio as a percentage string.
+
+    Example:
+        >>> format_pct(0.28)
+        '28.0%'
+    """
+    return f"{value * 100:.1f}%"
+
+
+# ──────────────────────────────────────────────────────────────────
+# Visual Components — Revenue Distribution Bar
+# ──────────────────────────────────────────────────────────────────
+
+
+def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Text:
+    """Render a proportional stacked bar showing how revenue is split.
+
+    Uses Unicode block characters (█) to create a stacked horizontal
+    bar chart that instantly communicates: "How much do I keep?"
+
+    Each segment is proportionally sized and color-coded:
+        - Amber:    Net Salary (Pró-labore after INSS)
+        - Red-Orange: INSS contribution
+        - Red:      DAS tax
+        - Teal:     What you keep (dividends)
+
+    Args:
+        results: Dictionary returned by calculate_taxes().
+        width: Character width of the bar (default 44).
+
+    Returns:
+        Rich Text object with the colored stacked bar + legend.
+    """
+    gross = results["gross_revenue_brl"]
+    if gross <= 0:
+        return Text("  (No revenue to display)", style="label.dim")
+
+    # Segment definitions: (value, color, label)
+    pro_labore_net = results["ideal_pro_labore"] - results["inss_tax"]
+    inss = results["inss_tax"]
+    das = results["estimated_das"]
+    remaining = gross - results["ideal_pro_labore"] - das
+
+    # When dividends are negative, expenses exceed revenue.
+    # Normalize against total outflows so the bar stays within width.
+    if remaining < 0:
+        # Show costs as proportion of total cost (not revenue)
+        total_cost = pro_labore_net + inss + das
+        segments = [
+            (pro_labore_net, "#f4a261", "Salary"),
+            (inss, "#e76f51", "INSS"),
+            (das, "#e63946", "DAS"),
+        ]
+        denominator = total_cost
+        suffix = " of costs"
+    else:
+        segments = [
+            (pro_labore_net, "#f4a261", "Salary"),
+            (inss, "#e76f51", "INSS"),
+            (das, "#e63946", "DAS"),
+            (remaining, "#2ec4b6", "Yours"),
+        ]
+        denominator = gross
+        suffix = ""
+
+    # Build proportional bar
+    bar = Text()
+    legend_parts = []
+
+    for value, color, label in segments:
+        pct = max(value / denominator, 0) if denominator > 0 else 0
+        chars = max(round(pct * width), 1 if value > 0 else 0)
+        bar.append("█" * chars, style=color)
+        if value > 0:
+            legend_parts.append(
+                Text.assemble(
+                    ("█ ", color),
+                    (f"{label} {pct * 100:.0f}%{suffix}", "label.dim"),
+                )
+            )
+
+    # Compose: bar on one line, legend on the next
+    result = Text()
+    result.append("  ")
+    result.append_text(bar)
+    result.append("\n  ")
+    for i, part in enumerate(legend_parts):
+        result.append_text(part)
+        if i < len(legend_parts) - 1:
+            result.append("   ", style="label.dim")
+
+    return result
+
+
+# ──────────────────────────────────────────────────────────────────
+# Core Business Logic — Tax Calculation Engine
+#
+# This function is the mathematical heart of RCal. Its signature and
+# return shape MUST NOT change — existing unit tests depend on it.
+# ──────────────────────────────────────────────────────────────────
+
+
 def calculate_taxes(
     revenue_usd: float,
     exchange_rate: float,
 ) -> dict[str, float | str]:
     """Calculate all tax components for a given monthly revenue.
-    
+
     This function implements the Fator R optimization strategy:
     1. Convert USD revenue to BRL using the provided exchange rate.
     2. Calculate the minimum Pró-labore needed to keep Fator R >= 28%.
     3. Ensure Pró-labore is at least the legal minimum wage.
     4. Compute INSS, DAS, IRPF status, dividends, and net take-home.
-    
+
     Args:
         revenue_usd: Monthly revenue in US dollars.
         exchange_rate: Current USD → BRL exchange rate.
-    
+
     Returns:
         Dictionary with all calculated tax components.
     """
@@ -186,6 +425,105 @@ def calculate_taxes(
     }
 
 
+# ──────────────────────────────────────────────────────────────────
+# Display — Branded Header
+# ──────────────────────────────────────────────────────────────────
+
+
+def display_header(console: Console) -> None:
+    """Print the visually attractive branded RCal header.
+
+    Renders the ASCII art logo centered with brand colors, followed
+    by the application subtitle and a decorative rule separator.
+
+    Args:
+        console: Rich console instance for output.
+    """
+    console.print()
+    console.print(Align.center(Text(LOGO, style="brand")))
+    console.print()
+    console.print(
+        Align.center(
+            Text("Simples Nacional Tax Calculator", style="heading")
+        )
+    )
+    console.print(
+        Align.center(
+            Text(
+                "Anexo III  ·  Fator R  ·  Export Exemptions",
+                style="label.dim",
+            )
+        )
+    )
+    console.print()
+    console.print(Rule(style="border.dim"))
+    console.print()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Display — Input Collection (with smart defaults and memory)
+# ──────────────────────────────────────────────────────────────────
+
+
+def collect_inputs(
+    console: Console,
+    prev_exchange_rate: float | None = None,
+) -> tuple[str, float, float]:
+    """Collect and validate all three user inputs with smart defaults.
+
+    On the first run, all fields are prompted fresh. On subsequent
+    runs (when prev_exchange_rate is provided), the exchange rate
+    is pre-filled from the previous session since it rarely changes
+    within a single usage session.
+
+    Args:
+        console: Rich console instance for output.
+        prev_exchange_rate: Exchange rate from previous calculation,
+            or None for the first run.
+
+    Returns:
+        Tuple of (month_year, revenue_usd, exchange_rate).
+    """
+    # Smart default: current month/year
+    default_month_year = datetime.now().strftime("%m/%Y")
+
+    month_year: str = MonthYearPrompt.ask(
+        "[prompt.label]📅 Current Month/Year[/] [prompt.hint](MM/YYYY)[/]",
+        console=console,
+        default=default_month_year,
+    )
+
+    revenue_usd: float = PositiveFloatPrompt.ask(
+        "[prompt.label]💵 Monthly Revenue in USD[/]",
+        console=console,
+    )
+
+    # Pre-fill exchange rate from previous run if available
+    if prev_exchange_rate is not None:
+        exchange_rate: float = PositiveFloatPrompt.ask(
+            "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+            console=console,
+            default=prev_exchange_rate,
+        )
+    else:
+        exchange_rate = PositiveFloatPrompt.ask(
+            "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+            console=console,
+        )
+
+    return month_year, revenue_usd, exchange_rate
+
+
+# ──────────────────────────────────────────────────────────────────
+# Display — Results Output (3-Zone Visual Architecture)
+#
+# Zone 1: Input Recap    — compact horizontal cards
+# Zone 2: Tax Breakdown  — structured table with semantic styles
+# Zone 3: Bottom Line    — highlighted panel with breakdown bar
+# Footer: Legal context  — structured, subdued rule sections
+# ──────────────────────────────────────────────────────────────────
+
+
 def display_results(
     console: Console,
     month_year: str,
@@ -193,8 +531,12 @@ def display_results(
     exchange_rate: float,
     results: dict[str, float | str],
 ) -> None:
-    """Render the calculation results as a beautifully formatted Rich table.
-    
+    """Render calculation results in a 3-zone visual architecture.
+
+    This function replaces the original monolithic table with three
+    visually distinct zones that mirror the user's mental model:
+    "What did I enter?" → "What are the numbers?" → "What do I keep?"
+
     Args:
         console: Rich console instance for output.
         month_year: The reference month/year string (e.g., "03/2026").
@@ -202,186 +544,424 @@ def display_results(
         exchange_rate: USD → BRL exchange rate used.
         results: Dictionary returned by calculate_taxes().
     """
-    # ── Input Summary Panel ──────────────────────────────────────
-    input_table = Table(
-        box=box.SIMPLE_HEAD,
-        show_header=False,
-        padding=(0, 2),
-    )
-    input_table.add_column("Label", style="dim", min_width=22)
-    input_table.add_column("Value", style="bold white")
-
-    input_table.add_row("📅 Reference Month", month_year)
-    input_table.add_row("💵 Revenue (USD)", f"US$ {revenue_usd:,.2f}")
-    input_table.add_row("💱 Exchange Rate", f"1 USD = R$ {exchange_rate:,.4f}")
-
     console.print()
-    console.print(
-        Panel(
-            input_table,
-            title="[bold cyan]📥 Input Parameters[/]",
-            border_style="cyan",
-            padding=(1, 2),
-        )
-    )
 
-    # ── Results Table ────────────────────────────────────────────
+    # ── Zone 1: Input Recap (compact horizontal cards) ───────────
+    cards = [
+        Panel(
+            Align.center(Text(month_year, style="heading")),
+            title="[label]📅 Month[/]",
+            border_style="border.dim",
+            width=18,
+            padding=(0, 1),
+        ),
+        Panel(
+            Align.center(
+                Text(f"US$ {revenue_usd:,.2f}", style="heading")
+            ),
+            title="[label]💵 Revenue[/]",
+            border_style="border.dim",
+            width=22,
+            padding=(0, 1),
+        ),
+        Panel(
+            Align.center(
+                Text(f"R$ {exchange_rate:,.4f}", style="heading")
+            ),
+            title="[label]💱 Rate[/]",
+            border_style="border.dim",
+            width=18,
+            padding=(0, 1),
+        ),
+    ]
+    console.print(Align.center(Columns(cards, padding=(0, 1))))
+    console.print()
+
+    # ── Zone 2: Tax Breakdown Table ──────────────────────────────
     table = Table(
-        title="",
         box=box.ROUNDED,
-        title_style="bold bright_white",
-        header_style="bold bright_cyan",
-        border_style="bright_blue",
+        header_style="heading",
+        border_style="border.primary",
         show_lines=True,
         padding=(0, 2),
-        min_width=60,
+        min_width=58,
     )
 
-    table.add_column("📋 Item", style="bold white", min_width=30)
-    table.add_column("💰 Value", justify="right", style="bold green", min_width=20)
+    table.add_column("📋 Item", style="label", min_width=28)
+    table.add_column("💰 Value", justify="right", min_width=20)
 
-    # Row 1: Gross Revenue
+    # ─ Revenue
     table.add_row(
         "Gross Revenue (BRL)",
-        format_brl(results["gross_revenue_brl"]),
+        Text(format_brl(results["gross_revenue_brl"]), style="money.positive"),
     )
 
-    # Row 2: Fator R Minimum (informational)
+    # ─ Salary Strategy
     table.add_row(
-        "Fator R Minimum (28%)",
-        format_brl(results["fator_r_minimum"]),
-        style="dim",
+        Text("Fator R Minimum (28%)", style="label.dim"),
+        Text(format_brl(results["fator_r_minimum"]), style="label.dim"),
     )
-
-    # Row 3: Ideal Pró-labore (highlighted)
     table.add_row(
-        "✨ Ideal Pró-labore",
-        format_brl(results["ideal_pro_labore"]),
-        style="bold bright_yellow",
+        Text("✨ Ideal Pró-labore", style="money.highlight"),
+        Text(format_brl(results["ideal_pro_labore"]), style="money.highlight"),
     )
 
-    # Row 4: INSS Tax (deduction)
+    # ─ Deductions
     table.add_row(
         "INSS (11%)",
-        f"- {format_brl(results['inss_tax'])}",
-        style="red",
+        Text(f"- {format_brl(results['inss_tax'])}", style="money.negative"),
     )
-
-    # Row 5: DAS Tax (deduction)
     table.add_row(
         "DAS (Simples Nacional)",
-        f"- {format_brl(results['estimated_das'])}",
-        style="red",
+        Text(
+            f"- {format_brl(results['estimated_das'])}",
+            style="money.negative",
+        ),
     )
 
-    # Row 6: IRPF Status
+    # ─ IRPF Status
     irpf = str(results["irpf_status"])
-    irpf_style = "bold red" if "⚠️" in irpf else "bold green"
-    table.add_row("IRPF Status", irpf, style=irpf_style)
+    irpf_style = "status.danger" if "⚠️" in irpf else "status.ok"
+    table.add_row("IRPF Status", Text(irpf, style=irpf_style))
 
-    # Row 6b: Bracket Warning (only if applicable)
+    # ─ Bracket Warning (conditional)
     bracket_warn = str(results.get("bracket_warning", ""))
     if bracket_warn:
         table.add_row(
             "📈 Bracket Warning",
-            bracket_warn,
-            style="bold yellow",
+            Text(bracket_warn, style="status.warn"),
         )
 
-    # Row 7: Available Dividends
-    table.add_row(
-        "📦 Available Dividends",
-        format_brl(results["available_dividends"]),
-        style="bright_green",
+    console.print(
+        Align.center(
+            Panel(
+                table,
+                title="[heading]📊 Tax Breakdown[/]",
+                border_style="border.primary",
+                padding=(1, 1),
+            )
+        )
+    )
+    console.print()
+
+    # ── Zone 3: Bottom Line Panel ────────────────────────────────
+    dividends = results["available_dividends"]
+    net = results["total_net_take_home"]
+    gross = results["gross_revenue_brl"]
+
+    # Build the bottom-line summary table
+    bottom_table = Table(
+        box=None,
+        show_header=False,
+        padding=(0, 2),
+        min_width=44,
+    )
+    bottom_table.add_column("Label", min_width=26)
+    bottom_table.add_column("Value", justify="right", min_width=16)
+
+    # Dividends row — style differs when negative
+    div_style = "status.danger" if dividends < 0 else "money.positive"
+    bottom_table.add_row(
+        Text("📦 Tax-Free Dividends", style="label"),
+        Text(format_brl(dividends), style=div_style),
     )
 
-    # Row 8: Total Net Take-Home (grand total)
-    table.add_row(
-        "🏠 Total Net Take-Home",
-        format_brl(results["total_net_take_home"]),
-        style="bold bright_white on blue",
+    # Net take-home row (grand total)
+    bottom_table.add_row(
+        Text("🏠 Net Take-Home", style="heading"),
+        Text(format_brl(net), style="money.total"),
     )
+
+    # Effective tax burden percentage
+    if gross > 0:
+        total_taxes = results["inss_tax"] + results["estimated_das"]
+        tax_pct = total_taxes / gross
+        bottom_table.add_row(
+            Text("📉 Effective Tax Burden", style="label"),
+            Text(format_pct(tax_pct), style="status.warn"),
+        )
+
+    # Revenue distribution breakdown bar
+    breakdown_bar = render_breakdown_bar(results)
+
+    # Compose the bottom-line content
+    if dividends < 0:
+        # ── Negative Dividends: Explicit Danger Panel ────────
+        # Explains the problem and offers two actionable options
+        warning_content = Text.assemble(
+            ("⚠️  Revenue Too Low\n\n", "status.danger"),
+            ("Your monthly revenue (", "label"),
+            (format_brl(gross), "heading"),
+            (") is not enough to cover the\n", "label"),
+            ("minimum Pró-labore (", "label"),
+            (format_brl(results["ideal_pro_labore"]), "money.highlight"),
+            (") + DAS tax (", "label"),
+            (format_brl(results["estimated_das"]), "money.negative"),
+            (").\n\n", "label"),
+            ("Dividends are negative: ", "label"),
+            (format_brl(dividends), "status.danger"),
+            ("\nThis means the company would need to ", "label"),
+            ("inject capital", "status.danger"),
+            (" to cover expenses.\n\n", "label"),
+            ("━━━ What you can do ━━━\n\n", "status.warn"),
+            ("  ① ", "status.warn"),
+            ("Increase revenue", "heading"),
+            (" — Raise your monthly billing above ", "label"),
+            (format_brl(results["ideal_pro_labore"] + results["estimated_das"]),
+             "money.highlight"),
+            ("\n     to generate positive dividends.\n\n", "label"),
+            ("  ② ", "status.warn"),
+            ("Accept minimum wage salary", "heading"),
+            (" — At this revenue level the\n", "label"),
+            ("     Pró-labore is already at the legal minimum (", "label"),
+            (format_brl(LEGAL_MINIMUM_WAGE), "money.highlight"),
+            (").\n     The company must still cover DAS + INSS "
+             "from available funds.", "label"),
+        )
+
+        bottom_content = Group(
+            bottom_table,
+            Text(""),
+            Panel(
+                warning_content,
+                border_style="status.danger",
+                title="[status.danger]⚠️  Action Required[/]",
+                padding=(1, 2),
+            ),
+            Text(""),
+            Text("  Revenue Distribution", style="label"),
+            breakdown_bar,
+        )
+    else:
+        bottom_content = Group(
+            bottom_table,
+            Text(""),
+            Text("  Revenue Distribution", style="label"),
+            breakdown_bar,
+        )
+
+    console.print(
+        Align.center(
+            Panel(
+                bottom_content,
+                title="[heading]💰 Your Bottom Line[/]",
+                border_style="brand",
+                padding=(1, 2),
+            )
+        )
+    )
+    console.print()
+
+    # ── Footer: Legal Context (structured, subdued) ──────────────
+    display_footer(console)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Display — Structured Footer
+# ──────────────────────────────────────────────────────────────────
+
+
+def display_footer(console: Console) -> None:
+    """Print the legal context footer as structured Rule-separated sections.
+
+    Each section is visually distinct but clearly secondary to the
+    main results, using dim styles and Rule titles.
+
+    Args:
+        console: Rich console instance for output.
+    """
+    console.print(Rule(title="💡 Strategy", style="border.dim"))
+    console.print(
+        Text(
+            "  Paying ≥28% of gross as salary keeps you in Anexo III (~6%) "
+            "instead of Anexo V (~15.5%).\n"
+            "  The ideal Pró-labore is the minimum needed to maintain this "
+            "threshold while respecting the legal minimum wage.",
+            style="label.dim",
+        )
+    )
+    console.print()
+
+    console.print(Rule(title="💱 Exchange Rate", style="border.dim"))
+    console.print(
+        Text(
+            "  Use the BRL rate on the date the funds are made available or "
+            "the invoice is issued — not the withdrawal date.",
+            style="label.dim",
+        )
+    )
+    console.print()
+
+    console.print(Rule(title="⚖️  Disclaimer", style="border.dim"))
+    console.print(
+        Text(
+            "  Estimates for planning purposes only. Always consult a "
+            "qualified Brazilian accountant (contador) for official filings.",
+            style="label.dim",
+        )
+    )
+    console.print()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Loop Mode — "Calculate Another Month?"
+#
+# After each calculation, the user is asked whether to continue.
+# If yes, they choose what to change:
+#   [1] All inputs (fresh calculation)
+#   [2] Only revenue (keeps month + exchange rate)
+#   [3] Only exchange rate (keeps month + revenue)
+#
+# The exchange rate is always remembered from the previous run
+# and offered as a default, since it rarely changes within a session.
+# ──────────────────────────────────────────────────────────────────
+
+
+def prompt_next_action(console: Console) -> str | None:
+    """Ask the user what they want to do next after a calculation.
+
+    Returns:
+        "all"      — re-enter all inputs
+        "revenue"  — change only revenue (keep month + rate)
+        "rate"     — change only exchange rate (keep month + revenue)
+        None       — exit the application
+    """
+    console.print(Rule(style="border.dim"))
+    console.print()
+
+    if not Confirm.ask(
+        "[prompt.label]🔄 Calculate another month?[/]",
+        console=console,
+        default=True,
+    ):
+        return None
 
     console.print()
     console.print(
-        Panel(
-            table,
-            title="[bold bright_white]📊 Tax Calculation Results[/]",
-            border_style="bright_blue",
-            padding=(1, 1),
-        )
-    )
-
-    # ── Footer with Fator R explanation ──────────────────────────
-    footer_text = Text.assemble(
-        ("💡 Fator R Strategy: ", "bold cyan"),
-        (
-            "Paying at least 28% of gross revenue as Pró-labore keeps your "
-            "company in Anexo III (lower tax rates) instead of Anexo V. "
-            "The ideal Pró-labore above is the minimum needed to maintain "
-            "this threshold while respecting the legal minimum wage.\n\n",
-            "dim white",
-        ),
-        ("💱 Exchange Rate Note: ", "bold cyan"),
-        (
-            "Per Brazilian tax law, foreign income must be converted using "
-            "the BRL exchange rate on the date the funds are made available "
-            "or the invoice is issued — not the withdrawal date.\n\n",
-            "dim white",
-        ),
-        ("⚖️  Disclaimer: ", "bold yellow"),
-        (
-            "This tool provides estimates for planning purposes only. "
-            "Always consult a qualified Brazilian accountant (contador) "
-            "for official tax filings.",
-            "dim white",
-        ),
+        Text("  What would you like to change?", style="heading")
     )
     console.print()
-    console.print(
-        Panel(
-            footer_text,
-            border_style="dim",
-            padding=(1, 2),
-        )
+    console.print(Text("  [1]  All inputs (month, revenue, rate)", style="label"))
+    console.print(Text("  [2]  Only revenue (keep current rate)", style="label"))
+    console.print(Text("  [3]  Only exchange rate (keep current revenue)", style="label"))
+    console.print()
+
+    choice = Prompt.ask(
+        "[prompt.label]  Your choice[/]",
+        console=console,
+        choices=["1", "2", "3"],
+        default="1",
     )
+
+    return {"1": "all", "2": "revenue", "3": "rate"}[choice]
+
+
+# ──────────────────────────────────────────────────────────────────
+# Main Entry Point — Interactive Loop with State Memory
+# ──────────────────────────────────────────────────────────────────
 
 
 def main() -> None:
-    """Entry point — collect user input and display the tax calculation."""
-    console = Console()
+    """Entry point — collect user input, calculate, display, and loop.
 
-    # ── Header ──────────────────────────────────────────────────
-    header = Text("RCal", style="bold bright_cyan")
-    subtitle = Text(
-        "Simples Nacional Tax Calculator • Anexo III • Fator R",
-        style="dim white",
-    )
-    console.print()
-    console.print(Panel.fit(
-        Text.assemble(header, "\n", subtitle),
-        border_style="bright_blue",
-        padding=(1, 4),
-    ))
-    console.print()
+    Implements a stateful interactive loop where the exchange rate
+    is remembered between runs. The user chooses what to recalculate
+    each iteration, making multi-scenario comparison effortless.
+    """
+    console = Console(theme=RCAL_THEME)
 
-    # ── Collect Inputs ──────────────────────────────────────────
-    month_year: str = Prompt.ask(
-        "[bold cyan]📅 Current Month/Year[/] [dim](e.g. 03/2026)[/]"
-    )
+    # State carried between loop iterations
+    prev_month_year: str | None = None
+    prev_revenue_usd: float | None = None
+    prev_exchange_rate: float | None = None
 
-    revenue_usd: float = FloatPrompt.ask(
-        "[bold cyan]💵 Monthly Revenue in USD[/]"
-    )
+    try:
+        # ── Header ──────────────────────────────────────────────
+        display_header(console)
 
-    exchange_rate: float = FloatPrompt.ask(
-        "[bold cyan]💱 USD → BRL Exchange Rate[/]"
-    )
+        # ── First Run: Collect all inputs ───────────────────────
+        month_year, revenue_usd, exchange_rate = collect_inputs(console)
 
-    # ── Calculate & Display ─────────────────────────────────────
-    results = calculate_taxes(revenue_usd, exchange_rate)
-    display_results(console, month_year, revenue_usd, exchange_rate, results)
-    console.print()
+        while True:
+            # ── Calculation with tactile spinner feedback ────────
+            console.print()
+            with console.status(
+                "[brand]  Calculating…[/]",
+                spinner="dots",
+                spinner_style="brand",
+            ):
+                results = calculate_taxes(revenue_usd, exchange_rate)
+                time.sleep(0.35)
+
+            # ── Display Results ─────────────────────────────────
+            display_results(
+                console, month_year, revenue_usd, exchange_rate, results
+            )
+
+            # ── Remember state for next iteration ───────────────
+            prev_month_year = month_year
+            prev_revenue_usd = revenue_usd
+            prev_exchange_rate = exchange_rate
+
+            # ── Ask what to do next ─────────────────────────────
+            action = prompt_next_action(console)
+            if action is None:
+                break
+
+            console.print()
+            console.print(Rule(style="border.dim"))
+            console.print()
+
+            if action == "all":
+                # Re-enter everything (rate pre-filled from last run)
+                month_year, revenue_usd, exchange_rate = collect_inputs(
+                    console, prev_exchange_rate=prev_exchange_rate
+                )
+
+            elif action == "revenue":
+                # Only change revenue — keep month + rate
+                console.print(
+                    Text(
+                        f"  Keeping: 📅 {prev_month_year}  ·  "
+                        f"💱 R$ {prev_exchange_rate:,.4f}",
+                        style="label.dim",
+                    )
+                )
+                console.print()
+                revenue_usd = PositiveFloatPrompt.ask(
+                    "[prompt.label]💵 Monthly Revenue in USD[/]",
+                    console=console,
+                )
+                month_year = prev_month_year  # type: ignore[assignment]
+                exchange_rate = prev_exchange_rate  # type: ignore[assignment]
+
+            elif action == "rate":
+                # Only change exchange rate — keep month + revenue
+                console.print(
+                    Text(
+                        f"  Keeping: 📅 {prev_month_year}  ·  "
+                        f"💵 US$ {prev_revenue_usd:,.2f}",
+                        style="label.dim",
+                    )
+                )
+                console.print()
+                exchange_rate = PositiveFloatPrompt.ask(
+                    "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+                    console=console,
+                    default=prev_exchange_rate,
+                )
+                month_year = prev_month_year  # type: ignore[assignment]
+                revenue_usd = prev_revenue_usd  # type: ignore[assignment]
+
+        # ── Goodbye ─────────────────────────────────────────────
+        console.print()
+        console.print(Rule(title="👋 Obrigado!", style="brand"))
+        console.print()
+
+    except KeyboardInterrupt:
+        console.print("\n")
+        console.print(Rule(title="👋 Até logo!", style="border.dim"))
+        console.print()
 
 
 if __name__ == "__main__":
