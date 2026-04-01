@@ -105,9 +105,7 @@ RCal/
 └── docs/
     ├── AI_REFERENCE_DOC.md
     ├── COMPLIANCE_AUDIT.md
-    ├── COMPLIANCE_ZERO_REVENUE.md
-    ├── walkthrough.md
-    └── initial-prompt.md
+    └── COMPLIANCE_ZERO_REVENUE.md
 ```
 
 ## Development and QA
@@ -133,8 +131,6 @@ bash qa.sh
 - `docs/AI_REFERENCE_DOC.md`: tax logic and invariants
 - `docs/COMPLIANCE_AUDIT.md`: compliance boundaries and review notes
 - `docs/COMPLIANCE_ZERO_REVENUE.md`: low/zero revenue legal advisory context
-- `docs/REPO_HOUSEKEEPING.md`: archive candidates and cleanup plan
-- `docs/walkthrough.md`: implementation walkthrough and project evolution
 
 ## Limitations
 

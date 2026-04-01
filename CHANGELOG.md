@@ -4,6 +4,32 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [3.2.1] — 2026-04-01
+
+### 🧹 Documentation Surface Cleanup
+
+Repository documentation was streamlined for public open-source readability by reducing internal planning/history files from the public `docs/` surface.
+
+### Added
+
+- **`requirements-dev.txt`** — Explicit development dependency list aligned with the QA workflow.
+- **GitHub CI Workflow** — Added `.github/workflows/ci.yml` to run linting, typing, tests, coverage gate, and benchmark smoke on push/PR.
+- **Issue Template Config** — Added `.github/ISSUE_TEMPLATE/config.yml` to route security reports and disable blank issues.
+
+### Changed
+
+- **README docs map** — Updated `README.md` project layout and documentation references to match the active `docs/` directory.
+- **Open-source governance** — Previously added governance/community files are now reflected as the baseline OSS contributor flow.
+
+### Removed
+
+- **`docs/initial-prompt.md`** — Moved to local archive for internal retention.
+- **`docs/walkthrough.md`** — Moved to local archive for internal retention.
+- **`docs/REPO_HOUSEKEEPING.md`** — Moved to local archive after cleanup execution.
+- **Root `PRD.md`** — Removed from repository root and kept locally in archive workflow.
+
+---
+
 ## [3.2.0] — 2026-04-01
 
 ### 🏗️ Enterprise Architecture & Compliance Audit
