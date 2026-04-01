@@ -36,7 +36,7 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 
 - 🧮 **Automatic Fator R optimization** — calculates the ideal Pró-labore
 - 💱 **USD → BRL conversion** — built for service exporters
-- 🏛️ **Exact IRPF 2026 calculation** — progressive table + Lei nº 15.270/2025 reducer
+- 🏛️ **IRPF 2026 calculation aligned to Receita guidance** — progressive table, simplified monthly deduction, and Lei nº 15.270/2025 reducer
 - 📝 **Optional deductions** — dependents, PGBL pension, alimony (saved between sessions)
 - 🎨 **Premium terminal UI** — branded ASCII header, 3-zone layout, themed colors via [Rich](https://github.com/Textualize/rich)
 - 📊 **Visual revenue breakdown** — stacked bar chart showing salary/INSS/IRPF/DAS/dividends split
@@ -59,6 +59,7 @@ By ensuring the company's total payroll (primarily the administrator's **Pró-la
 | `FATOR_R_TARGET` | 28% | Minimum payroll-to-revenue ratio |
 | `IRPF_TABLE_2026` | 5 brackets | Progressive table: Isento / 7.5% / 15% / 22.5% / 27.5% |
 | `IRPF_DEPENDENT_DEDUCTION` | R$ 189,59 | Monthly IRPF deduction per dependent |
+| `IRPF_SIMPLIFIED_DEDUCTION` | R$ 607,20 | Optional monthly simplified deduction |
 | `IRPF_REDUCER_*` | Lei 15.270/2025 | Full exemption ≤ R$ 5k, phase-out to R$ 7.35k |
 
 ---
@@ -104,6 +105,20 @@ source .venv/bin/activate
 python3 -m unittest test_main -v
 ```
 
+### Run Full QA
+
+```bash
+source .venv/bin/activate
+bash qa.sh
+```
+
+### Recoverable Workspace Safeguards
+
+- Project autosave is enforced through `.vscode/settings.json`
+- Debug launch profiles are restored in `.vscode/launch.json`
+- `bash qa.sh` now creates a timestamped workspace backup in `backups/`
+- You can create a manual backup at any time with `python3 backup_workspace.py`
+
 ---
 
 ## 💻 Usage Example
@@ -147,15 +162,16 @@ When you run the tool, it will interactively prompt you for:
   │ │ INSS (11%)           │              - R$ 885,50  ││
   │ │ DAS (Simples)        │              - R$ 878,02  ││
   │ │ IRPF Taxable Base    │               R$ 7.164,50 ││
-  │ │ IRPF (Lei 15.270)    │            - R$ 1.036,80  ││
+  │ │ IRPF Deduction Mode  │       Legal (R$ 885,50)   ││
+  │ │ IRPF (Lei 15.270)    │            - R$ 1.061,51  ││
   │ │ 📈 Bracket Warning   │   ⚠️ Exceeds R$ 180k      ││
   │ └──────────────────────┴──────────────────────────┘│
   ╰────────────────────────────────────────────────────╯
 
   ╭────────────── 💰 Your Bottom Line ──────────────╮
   │  📦 Tax-Free Dividends         R$ 19.821,97     │
-  │  🏠 Net Take-Home              R$ 25.949,67     │
-  │  📉 Effective Tax Burden              9.7%      │
+  │  🏠 Net Take-Home              R$ 25.924,97     │
+  │  📉 Effective Tax Burden              9.8%      │
   │                                                  │
   │  Revenue Distribution                            │
   │  ██████████████████████████████████████████████  │
@@ -201,8 +217,8 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 | 3 | Ideal Pró-labore | `max(Fator_R_Min, 1621.00)` |
 | 4 | INSS Tax | `Pró-labore × 0.11` |
 | 5 | DAS Tax | `Gross_Revenue × 0.03054` |
-| 6 | IRPF Taxable Base | `Pró-labore − INSS − Dependents − PGBL − Alimony` |
-| 7 | IRPF Calculation | Progressive table + Lei 15.270/2025 reducer |
+| 6 | IRPF Taxable Base | `Pró-labore − max(Legal_Deductions, 607.20)` |
+| 7 | IRPF Calculation | Progressive table + Lei 15.270/2025 reducer using gross taxable income as the reduction trigger |
 | 8 | Dividends | `Gross_Revenue − Pró-labore − DAS` |
 | 9 | Net Take-Home | `(Pró-labore − INSS − IRPF) + Dividends` |
 
@@ -213,16 +229,25 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 ```text
 RCal/
 ├── rcal                 # One-command launcher (bash)
+├── backup_workspace.py  # Timestamped workspace backup generator
+├── benchmark.py         # Performance benchmark for the calculation engine
 ├── main.py              # Main application (UI + calculation engine)
-├── test_main.py         # Unit tests (145 tests, 18 test classes)
+├── test_main.py         # Unit tests (149 tests, 20 test classes)
+├── pyproject.toml       # Black / pytest / mypy / pylint configuration
+├── qa.sh                # Full QA pipeline with benchmark step
 ├── requirements.txt     # Python dependencies (rich>=13.0.0)
 ├── README.md            # This file
 ├── CHANGELOG.md         # Version history and changes
 ├── .gitignore           # Git ignore rules
 └── docs/
-    ├── initial-prompt.md    # Original specification
-    ├── AI_REFERENCE_DOC.md  # AI agent tax logic reference
-    └── walkthrough.md       # Project walkthrough
+    ├── AI_REFERENCE_DOC.md    # AI agent tax logic reference
+    ├── COMPLIANCE_AUDIT.md    # Source-aligned audit notes and checklist
+    ├── COMPLIANCE_ZERO_REVENUE.md
+    ├── initial-prompt.md
+    └── walkthrough.md
+└── .vscode/
+    ├── launch.json           # Restored debug configurations
+    └── settings.json         # Workspace autosave and hot-exit settings
 ```
 
 ---
@@ -243,7 +268,7 @@ If you're unfamiliar with Brazilian tax law, the comments in `main.py` provide c
 
 ## ⚖️ Disclaimer
 
-This tool provides **estimates for planning purposes only**. Tax calculations depend on many factors including accumulated revenue over the past 12 months, specific municipal taxes (ISS), and individual deductions.
+This tool provides **estimates for planning purposes only**. Official PGDAS-D and DAS filings still depend on accumulated revenue over the past 12 months, payroll history, municipal licensing facts, and confirmation that export exemptions apply to the service being billed.
 
 **Always consult a qualified Brazilian accountant (contador) for official tax filings.**
 

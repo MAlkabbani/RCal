@@ -32,6 +32,7 @@ from main import (
     INSS_CEILING,
     INSS_TAX_RATE,
     IRPF_DEPENDENT_DEDUCTION,
+    IRPF_SIMPLIFIED_DEDUCTION,
     LEGAL_MINIMUM_WAGE,
     MINIMUM_VIABLE_REVENUE_BRL,
     MonthYearPrompt,
@@ -133,8 +134,8 @@ class TestCalculateTaxes(unittest.TestCase):
         self.assertIn("Tax Free", str(self.results.irpf_status))
 
     def test_taxable_base(self) -> None:
-        """§5: Taxable base should be Pró-labore minus INSS."""
-        expected = LEGAL_MINIMUM_WAGE - 178.31  # 1442.69
+        """§5: Simplified monthly deduction should apply when it is better."""
+        expected = LEGAL_MINIMUM_WAGE - IRPF_SIMPLIFIED_DEDUCTION
         self.assertAlmostEqual(self.results.taxable_base, expected, places=2)
 
     # ── Additional Edge Cases ────────────────────────────────────
@@ -170,9 +171,8 @@ class TestHighRevenueScenario(unittest.TestCase):
     INSS: R$ 885,50 (11% of R$ 8.050)
     Taxable base: R$ 8.050 - R$ 885,50 = R$ 7.164,50
     → Falls in 27.5% bracket: 7164.50 × 0.275 - 908.73 = R$ 1.061,51
-    → 2026 reducer: taxable_base (7164.50) is between R$ 5.000 and R$ 7.350
-        reducer = 978.62 - (0.133145 × 7164.50) = 978.62 - 953.78 = R$ 24.84
-    → Final IRPF = 1.061,51 - 24,84 = R$ 1.036,67
+    → No 2026 reducer applies because the gross taxable income is R$ 8.050,00
+        which is above the R$ 7.350,00 reduction ceiling.
     """
 
     def setUp(self) -> None:
@@ -197,14 +197,13 @@ class TestHighRevenueScenario(unittest.TestCase):
         """IRPF should be a positive value for this high-income scenario."""
         self.assertGreater(self.results.irpf_tax, 0)
 
-    def test_irpf_calculation_with_reducer(self) -> None:
-        """Verify the exact IRPF value with the 2026 reducer applied.
+    def test_irpf_calculation_without_reducer(self) -> None:
+        """Verify the exact IRPF value when the gross salary exceeds R$ 7.350.
 
         Standard table: 7164.50 × 0.275 - 908.73 = 1061.5075
-        Reducer: 978.62 - (0.133145 × 7164.50) = 24.7026
-        Final: 1061.5075 - 24.7026 = 1036.80
+        Final: 1061.5075
         """
-        self.assertAlmostEqual(self.results.irpf_tax, 1036.80, places=1)
+        self.assertAlmostEqual(self.results.irpf_tax, 1061.51, places=2)
 
     def test_irpf_status_shows_amount(self) -> None:
         """IRPF status should show the calculated amount, not just 'Triggered'."""
@@ -336,6 +335,36 @@ class TestIRPF2026(unittest.TestCase):
         std, reducer, final = calculate_irpf_2026(2000.00)
         self.assertAlmostEqual(std, 0.0, places=2)
         self.assertAlmostEqual(final, 0.0, places=2)
+
+    def test_receita_example_2_full_reduction(self) -> None:
+        """Official Receita example: R$ 4.000 gross and R$ 3.392,80 base."""
+        std, reducer, final = calculate_irpf_2026(
+            3392.80,
+            reduction_basis=4000.00,
+        )
+        self.assertAlmostEqual(std, 114.76, places=2)
+        self.assertAlmostEqual(reducer, 114.76, places=2)
+        self.assertAlmostEqual(final, 0.0, places=2)
+
+    def test_receita_example_4_phase_out(self) -> None:
+        """Official Receita example: R$ 6.000 gross and R$ 5.350,40 base."""
+        std, reducer, final = calculate_irpf_2026(
+            5350.40,
+            reduction_basis=6000.00,
+        )
+        self.assertAlmostEqual(std, 562.63, places=2)
+        self.assertAlmostEqual(reducer, 179.75, places=2)
+        self.assertAlmostEqual(final, 382.88, places=2)
+
+    def test_reduction_uses_gross_income_not_base(self) -> None:
+        """Gross salary above R$ 7.350 removes the reduction even if the base does not."""
+        std, reducer, final = calculate_irpf_2026(
+            7164.50,
+            reduction_basis=8050.00,
+        )
+        self.assertAlmostEqual(std, 1061.51, places=2)
+        self.assertAlmostEqual(reducer, 0.0, places=2)
+        self.assertAlmostEqual(final, 1061.51, places=2)
 
     def test_exempt_bracket_boundary(self) -> None:
         """R$ 2.428,80 → exactly at the top of the Isento bracket."""
@@ -508,11 +537,26 @@ class TestIRPFDeductions(unittest.TestCase):
         self.assertIn("dependents", deductions)
         self.assertIn("pgbl", deductions)
         self.assertIn("alimony", deductions)
+        self.assertIn("simplified", deductions)
+        self.assertIn("applied_total", deductions)
         self.assertAlmostEqual(
             deductions["dependents"], IRPF_DEPENDENT_DEDUCTION, places=2
         )
         self.assertAlmostEqual(deductions["pgbl"], 200.00, places=2)
         self.assertAlmostEqual(deductions["alimony"], 300.00, places=2)
+
+    def test_simplified_deduction_wins_for_low_salary(self) -> None:
+        """Low pró-labore should switch to the simplified monthly deduction."""
+        results = calculate_taxes(
+            revenue_usd=883.00,
+            exchange_rate=5.23,
+        )
+        self.assertEqual(results.irpf_deduction_model, "Simplified")
+        self.assertAlmostEqual(
+            results.irpf_deduction_total,
+            IRPF_SIMPLIFIED_DEDUCTION,
+            places=2,
+        )
 
 
 class TestNetTakeHomeWithIRPF(unittest.TestCase):
@@ -740,6 +784,9 @@ class TestBreakdownBar(unittest.TestCase):
             irpf_standard=0.0,
             irpf_reducer=0.0,
             taxable_base=0.0,
+            irpf_deduction_model="Legal",
+            irpf_deduction_total=0.0,
+            irpf_reduction_basis=0.0,
             irpf_deductions={},
             bracket_warning="",
             available_dividends=0.0,
@@ -777,6 +824,9 @@ class TestBreakdownBar(unittest.TestCase):
             irpf_standard=0.0,
             irpf_reducer=0.0,
             taxable_base=4450.0,
+            irpf_deduction_model="Legal",
+            irpf_deduction_total=550.0,
+            irpf_reduction_basis=5000.0,
             irpf_deductions={},
             bracket_warning="",
             available_dividends=-4650.0,

@@ -14,13 +14,19 @@ A major structural refactoring of the application's typing system and test cover
 
 - **`TaxCalculationResult` Dataclass** — The core mathematical engine now natively returns a strictly typed dataclass instead of a generic dictionary, permanently eliminating over 300 potential static typing errors.
 - **`qa.sh` Automated Pipeline** — Introduced an integration script enforcing `black` formatting, `flake8` compliance, `pylint` standardizations, `mypy` typing limits, and 100% test coverage.
-- **100% Execution Coverage** — Completed full mocking of the `main()` interactive UI path via `unittest.mock.patch`, closing all execution gaps in the test suite. Expanded test cases to 145 total.
+- **`pyproject.toml` QA Configuration** — Centralized configuration for Black, pytest, mypy, and pylint to enforce consistent results in CI.
+- **`benchmark.py` Performance Benchmark** — Added a repeatable micro-benchmark for the tax calculation engine.
+- **Workspace Recovery Support** — Added `.vscode/settings.json`, `.vscode/launch.json`, and `backup_workspace.py` so autosave, debug launch profiles, and timestamped backups are part of the repository.
+- **`docs/COMPLIANCE_AUDIT.md`** — Source-aligned compliance audit notes and a peer review checklist.
+- **100% Execution Coverage** — Completed full mocking of the `main()` interactive UI path via `unittest.mock.patch`, closing all execution gaps in the test suite.
 
 ### Changed
 
 - **Codebase Standardization** — Extensively updated all `main.py` and `test_main.py` UI rendering functions to use standard object attribute access (`results.ideal_pro_labore`) instead of dictionary keys.
 - **Documentation Parity** — Synchronized `AI_REFERENCE_DOC.md` and `COMPLIANCE_ZERO_REVENUE.md` to structurally identify solopreneurs operating as Ltda (Sociedade Limitada) or SLU (Sociedade Limitada Unipessoal), aligning formally with 2026 SC/Florianópolis municipal expectations.
 - **Pylint Optimization** — Enhanced the structural health rating of the application to a 9.36/10 via explicit suppression strategies and typing conversions.
+- **IRPF 2026 Accuracy** — Implemented the optional simplified monthly deduction (R$ 607,20) when more favorable and aligned the Lei nº 15.270/2025 reduction trigger to gross taxable monthly income per Receita Federal examples.
+- **Test Coverage Expansion** — Expanded test coverage to validate official Receita Federal examples and updated the suite to 149 tests across 20 test classes.
 
 ---
 

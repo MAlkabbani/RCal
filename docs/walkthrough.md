@@ -6,6 +6,14 @@ RCal is a standalone Python CLI application that calculates the optimal **Pró-l
 
 ## 📦 Version History
 
+### v3.2 — Compliance Audit and QA Hardening (April 2026)
+
+- IRPF updated to apply the optional simplified monthly deduction when it is more favorable
+- Lei nº 15.270/2025 reduction now uses gross taxable monthly income as the legal trigger
+- New benchmark runner and centralized QA configuration added to the repository
+- Workspace autosave, debug launch profiles, and timestamped backup generation are now repository-managed
+- Repository docs synchronized with the current 149-test suite and compliance audit notes
+
 ### v3.0 — Full 2026 IRPF Calculation Engine (March 2026)
 
 Major upgrade replacing the binary IRPF status check with exact tax calculation per **Lei nº 15.270/2025**.
@@ -14,8 +22,9 @@ Major upgrade replacing the binary IRPF status check with exact tax calculation 
 
 - **`calculate_irpf_2026()` pure function** implementing 3-step algorithm:
   1. Standard progressive table (5 brackets from Receita Federal)
-  2. Lei nº 15.270/2025 reducer (full exemption ≤ R$ 5k, phase-out R$ 5k–R$ 7.35k)
-  3. Final IRPF = max(Standard − Reducer, 0)
+  2. Optional simplified deduction before table application when more favorable
+  3. Lei nº 15.270/2025 reducer using gross taxable monthly income as the trigger
+  4. Final IRPF = max(Standard − Reducer, 0)
 - Net Take-Home now subtracts IRPF: `(Pró-labore − INSS − IRPF) + Dividends`
 - Effective Tax Burden includes IRPF: `(INSS + DAS + IRPF) / Gross`
 
@@ -34,10 +43,10 @@ Major upgrade replacing the binary IRPF status check with exact tax calculation 
 
 #### 🧪 Expanded Test Suite
 
-- 46 → **92 tests** across 13 test classes
+- 46 → **149 tests** across 20 test classes in the current repository state
 - New: `TestIRPF2026` (12), `TestIRPFDeductions` (8), `TestNetTakeHomeWithIRPF` (5)
 - New: `TestNonNegativeIntPrompt` (6), `TestNonNegativeFloatPrompt` (4)
-- Updated: `TestHighRevenueScenario` with exact IRPF value (R$ 1.036,80)
+- Updated: `TestHighRevenueScenario` with the current official non-reduction case above R$ 7.350,00 gross salary
 
 ### v2.1 — One-Command Launcher & Cross-Session Memory (March 2026)
 
@@ -117,11 +126,15 @@ A complete overhaul of the terminal experience, transforming RCal from a single-
 ### File Structure
 
 - `rcal`: One-command bash launcher (auto-venv, auto-install, auto-run)
+- `benchmark.py`: Performance benchmark for repeated tax calculations
 - `main.py`: Application entry point containing UI layer + calculation engine
-- `test_main.py`: Unit test suite (92 tests, 13 test classes)
+- `test_main.py`: Unit test suite (149 tests, 20 test classes)
+- `pyproject.toml`: Shared QA configuration for Black, pytest, mypy, and pylint
+- `qa.sh`: Full formatting, lint, typing, tests, coverage, and benchmark pipeline
 - `requirements.txt`: Single dependency — `rich>=13.0.0`
 - `CHANGELOG.md`: Version history
 - `docs/AI_REFERENCE_DOC.md`: Canonical source of truth for business logic
+- `docs/COMPLIANCE_AUDIT.md`: Compliance findings, sources, and review checklist
 - `docs/initial-prompt.md`: Original project specification
 
 ### Design Principles
@@ -135,10 +148,11 @@ A complete overhaul of the terminal experience, transforming RCal from a single-
 
 ## 📸 Verification
 
-### Automated Tests (92/92 passing)
+### Automated Tests (149/149 passing)
 
 ```bash
-./rcal    # or: source .venv/bin/activate && python3 -m unittest test_main -v
+source .venv/bin/activate
+bash qa.sh
 ```
 
 ### Comprehensive Audit (March 31, 2026)

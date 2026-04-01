@@ -24,6 +24,7 @@ _AI Agents: Verify these values for the current operational year before executin
 | **INSS Ceiling**              | R$ 8.475,55     | Teto previdenciário — maximum INSS contribution base. INSS is capped at R$ 932,31/month.                     |
 | **Effective DAS (Bracket 1)** | ~3.054%         | The net tax rate for Anexo III (up to R$ 180k/year) after ISS, PIS, and COFINS export exemptions are applied. |
 | **IRPF Dependent Deduction**  | R$ 189,59       | Monthly IRPF deduction per declared dependent.                                                                |
+| **IRPF Simplified Deduction** | R$ 607,20       | Optional monthly simplified deduction when more favorable than legal deductions.                              |
 
 ---
 
@@ -37,8 +38,8 @@ The core algorithm relies on this specific sequence of operations:
 4.  **Tax Calculations:**
     - `INSS Due` = `Ideal Pró-labore` \* `0.11`
     - `DAS Due` = `Gross Revenue (BRL)` \* `0.03054`
-5.  **IRPF Taxable Base:** `Ideal Pró-labore` - `INSS Due` - `Dependents` - `PGBL (capped)` - `Alimony`
-6.  **IRPF Calculation:** Apply the 2026 progressive table, then the Lei nº 15.270/2025 reducer (see §7).
+5.  **IRPF Taxable Base:** `Ideal Pró-labore` - `MAX(Legal Deductions, Simplified Deduction)`
+6.  **IRPF Calculation:** Apply the 2026 progressive table to the taxable base, then apply the Lei nº 15.270/2025 reducer using the gross taxable monthly income as the trigger (see §7).
 7.  **Profit Distribution:** `Tax-Free Dividends` = `Gross Revenue (BRL)` - `Ideal Pró-labore` - `DAS Due`
 8.  **Net Take-Home:** `(Ideal Pró-labore - INSS Due - IRPF)` + `Tax-Free Dividends`
 9.  **Effective Tax Burden:** `(INSS Due + DAS Due + IRPF)` / `Gross Revenue (BRL)`
@@ -49,7 +50,7 @@ The core algorithm relies on this specific sequence of operations:
 
 When modifying the application, account for the following real-world complexities:
 
-- **Regional Minimum Wages:** States like Santa Catarina (SC) have regional minimum wages (e.g., R$ 2.106,00 for tech workers in Faixa 4 as of 2026). However, for the sole purpose of a business owner's _Pró-labore_ to contribute to INSS, the Federal Minimum Wage is the legally accepted floor. The application defaults to the Federal level to optimize tax savings.
+- **Regional Minimum Wages:** Santa Catarina maintains a regional wage floor for employee categories. ALESC approved R$ 1.978,00 for the fourth faixa in 2025, which includes processing and similar technical roles. RCal still uses the federal minimum wage as the planning floor for owner _Pró-labore_.
 - **Payment Gateways:** Foreign income (e.g., via Stripe) must be calculated using the BRL exchange rate on the exact date the funds are made available or the invoice is issued, not the date of withdrawal to a Brazilian bank account.
 - **Bracket Scaling:** The current hardcoded DAS rate (~3.05%) assumes the user is in Bracket 1 of Anexo III (Gross annual revenue up to R$ 180.000,00). If the company exceeds this, the effective rate must be dynamically calculated using the Receita Federal's progressive formula `((RBT12 * Nominal Rate) - Deductible Amount) / RBT12`.
 - **Negative Dividends:** When monthly revenue is too low (below roughly R$ 1.636,27 BRL), the minimum Pró-labore + DAS will exceed gross revenue, resulting in negative dividends. This means the company must inject capital. The application surfaces an explicit warning panel with actionable options in this scenario.
@@ -64,7 +65,7 @@ Use this specific scenario to test the application's math engine during CI/CD pi
 - **Expected BRL Gross:** R$ 4.618,09
 - **Expected Pró-labore:** R$ 1.621,00 _(Because 28% of 4618.09 is 1293.06, which is below the minimum wage floor)._
 - **Expected INSS:** R$ 178,31
-- **Expected Taxable Base:** R$ 1.442,69 _(1621.00 - 178.31)._
+- **Expected Taxable Base:** R$ 1.013,80 _(1621.00 - 607.20 simplified deduction)._
 - **Expected IRPF:** R$ 0,00 _(Taxable base is below the R$ 2.428,80 exempt bracket)._
 
 ---
@@ -76,8 +77,8 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 ### Critical Invariants
 
 - The `calculate_taxes()` function accepts `(revenue_usd, exchange_rate)` as positional args plus optional keyword args for deductions. All existing callers work without changes.
-- The return dictionary preserves all original keys and adds new IRPF keys: `irpf_tax`, `irpf_standard`, `irpf_reducer`, `taxable_base`, `irpf_deductions`.
-- 122 unit tests across 17 test classes validate the mathematical engine.
+- The return object preserves all original financial outputs and now exposes `irpf_deduction_model`, `irpf_deduction_total`, and `irpf_reduction_basis` for auditability.
+- 149 unit tests across 20 test classes validate the mathematical engine.
 - All visual styling uses semantic tokens from `RCAL_THEME`. Do not use inline color strings.
 - Input validation is handled by `MonthYearPrompt`, `PositiveFloatPrompt`, `NonNegativeIntPrompt`, and `NonNegativeFloatPrompt` subclasses. Float prompts reject `NaN` and `Infinity` via `math.isfinite()` guards.
 - State persistence functions (`load_state`, `save_state`, `clear_state`) must never raise exceptions — they are convenience features that fail silently.
@@ -86,7 +87,7 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 
 | Function | Purpose |
 |----------|---------|
-| `calculate_irpf_2026()` | Pure function: 3-step IRPF (table → reducer → final) |
+| `calculate_irpf_2026()` | Pure function: progressive table → legal reduction → final IRPF |
 | `calculate_taxes()` | Core engine: Fator R + INSS + DAS + IRPF + dividends + net |
 
 ### UI Components
@@ -116,7 +117,7 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 
 ### Dependencies
 
-- `rich>=13.0.0` — the **only** external dependency
+- `rich>=13.0.0` — the **only** runtime dependency
 - Python standard library: `json`, `pathlib`, `re`, `time`, `datetime`
 
 ---
@@ -133,7 +134,9 @@ _AI Agents: This section documents the IRPF (Individual Income Tax) calculation 
 
 ### Step 1 — Taxable Base (Base de Cálculo)
 
-`Taxable Base` = `Ideal Pró-labore` − `INSS` − `Dependents` − `PGBL (capped)` − `Alimony`
+`Legal Deductions` = `INSS` + `Dependents` + `PGBL (capped)` + `Alimony`
+
+`Taxable Base` = `Ideal Pró-labore` − `MAX(Legal Deductions, Simplified Deduction)`
 
 | Deduction | Value | Notes |
 |-----------|-------|-------|
@@ -141,6 +144,7 @@ _AI Agents: This section documents the IRPF (Individual Income Tax) calculation 
 | Dependents | R$ 189,59 per dependent | User-provided count. |
 | PGBL | Up to 12% of Pró-labore | Private pension (Previdência Complementar). Capped by law. |
 | Alimony | Full amount | Pensão Alimentícia, court-ordered. |
+| Simplified deduction | R$ 607,20 | Replaces all legal deductions whenever more favorable. |
 
 ### Step 2 — Standard IRPF (Tabela Progressiva Mensal 2026)
 
@@ -156,10 +160,10 @@ _AI Agents: This section documents the IRPF (Individual Income Tax) calculation 
 
 ### Step 3 — 2026 IRPF Reducer (Lei nº 15.270/2025)
 
-| Taxable Base | Reduction | Effect |
+| Gross Taxable Income | Reduction | Effect |
 |--------------|-----------|--------|
-| ≤ R$ 5.000,00 | Full exemption | Final IRPF = R$ 0,00 |
-| R$ 5.000,01 to R$ 7.350,00 | `R$ 978,62 − (0,133145 × Taxable Base)` | Phase-out zone: gradual reduction |
+| ≤ R$ 5.000,00 | Limited to the standard IRPF | Final IRPF can be reduced to R$ 0,00 |
+| R$ 5.000,01 to R$ 7.350,00 | `R$ 978,62 − (0,133145 × Gross Taxable Income)` | Phase-out zone: gradual reduction |
 | > R$ 7.350,00 | No reduction | Final IRPF = Standard IRPF |
 
 `Final IRPF` = max(`Standard IRPF` − `Reducer`, 0)
@@ -167,6 +171,10 @@ _AI Agents: This section documents the IRPF (Individual Income Tax) calculation 
 ### Step 4 — Updated Net Take-Home
 
 `Net Take-Home` = `Dividends` + (`Ideal Pró-labore` − `INSS` − `Final IRPF`)
+
+### Filing Boundary
+
+The current CLI remains a planning calculator. Official PGDAS-D and DAS filings still require rolling 12-month revenue, payroll history, and confirmation that the billed service qualifies for export treatment.
 
 ---
 

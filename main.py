@@ -189,16 +189,18 @@ IRPF_DEPENDENT_DEDUCTION: float = 189.59
 """Monthly deduction per dependent for IRPF calculation (R$ 189,59).
 Applied before computing the taxable base."""
 
+IRPF_SIMPLIFIED_DEDUCTION: float = 607.20
+"""Optional monthly simplified deduction for IRRF in 2026 (R$ 607,20).
+This replaces the legal deductions whenever it is more favorable."""
+
 IRPF_REDUCER_FULL_EXEMPTION_LIMIT: float = 5_000.00
-"""Taxable base threshold for full IRPF exemption under Lei nº 15.270/2025.
-If the taxable base is at or below this value, the final IRPF is R$ 0,00."""
+"""Gross taxable income threshold for full IRPF reduction in 2026."""
 
 IRPF_REDUCER_PHASE_OUT_LIMIT: float = 7_350.00
-"""Taxable base threshold above which the 2026 reducer no longer applies.
-Between R$ 5.000,01 and R$ 7.350,00 the reducer gradually decreases."""
+"""Gross taxable income threshold above which the 2026 reduction ends."""
 
 IRPF_REDUCER_BASE: float = 978.62
-"""Base value for the 2026 reducer formula: 978.62 - (0.133145 × taxable_base)."""
+"""Base value for the 2026 reducer formula."""
 
 IRPF_REDUCER_FACTOR: float = 0.133145
 """Multiplier for the 2026 reducer formula."""
@@ -387,8 +389,10 @@ class PositiveFloatPrompt(FloatPrompt):
         """
         try:
             result = float(value)
-        except ValueError:
-            raise InvalidResponse("[status.danger]  ✗ Please enter a valid number.[/]")
+        except ValueError as exc:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Please enter a valid number.[/]"
+            ) from exc
         if not math.isfinite(result) or result <= 0:
             raise InvalidResponse(
                 "[status.danger]  ✗ Value must be a finite number greater than zero.[/]"
@@ -418,10 +422,10 @@ class NonNegativeIntPrompt(Prompt):
         value = value.strip()
         try:
             result = int(value)
-        except ValueError:
+        except ValueError as exc:
             raise InvalidResponse(
                 "[status.danger]  ✗ Please enter a whole number (0 or above).[/]"
-            )
+            ) from exc
         if result < 0:
             raise InvalidResponse("[status.danger]  ✗ Value cannot be negative.[/]")
         return result
@@ -449,8 +453,10 @@ class NonNegativeFloatPrompt(FloatPrompt):
         """
         try:
             result = float(value)
-        except ValueError:
-            raise InvalidResponse("[status.danger]  ✗ Please enter a valid number.[/]")
+        except ValueError as exc:
+            raise InvalidResponse(
+                "[status.danger]  ✗ Please enter a valid number.[/]"
+            ) from exc
         if not math.isfinite(result) or result < 0:
             raise InvalidResponse(
                 "[status.danger]  ✗ Value must be a finite, non-negative number.[/]"
@@ -473,6 +479,8 @@ class NonNegativeFloatPrompt(FloatPrompt):
 
 def calculate_irpf_2026(
     taxable_base: float,
+    *,
+    reduction_basis: float | None = None,
 ) -> tuple[float, float, float]:
     """Calculate the 2026 IRPF using the progressive table + Lei 15.270/2025 reducer.
 
@@ -483,17 +491,20 @@ def calculate_irpf_2026(
         Standard IRPF = (taxable_base × alíquota) - dedução.
 
     Step 2 — Lei nº 15.270/2025 Reducer:
-        - If taxable_base ≤ R$ 5.000: Final IRPF = R$ 0,00 (full exemption).
-        - If R$ 5.000,01 ≤ taxable_base ≤ R$ 7.350:
-          Reduction = R$ 978,62 - (0,133145 × taxable_base).
+        - If gross taxable income ≤ R$ 5.000: the reduction can zero the tax.
+        - If gross taxable income is between R$ 5.000,01 and R$ 7.350:
+          Reduction = R$ 978,62 - (0,133145 × gross taxable income).
           Final IRPF = max(Standard IRPF - Reduction, 0).
-        - If taxable_base > R$ 7.350: Final IRPF = Standard IRPF (no reduction).
+        - If gross taxable income > R$ 7.350: Final IRPF = Standard IRPF.
 
     Step 3 — Return all three values for transparency.
 
     Args:
         taxable_base: The IRPF taxable base after all deductions
-            (Pró-labore - INSS - dependents - PGBL - alimony).
+            or after the optional simplified deduction.
+        reduction_basis: Gross taxable income used by the official
+            2026 reduction table. Defaults to taxable_base for
+            backward compatibility in isolated tests.
 
     Returns:
         Tuple of (standard_irpf, reducer_amount, final_irpf).
@@ -501,9 +512,11 @@ def calculate_irpf_2026(
         - reducer_amount: Reduction applied by Lei 15.270/2025.
         - final_irpf: The actual tax owed after the reducer.
     """
-    # Step 1: Standard progressive table
     if taxable_base <= 0:
         return (0.0, 0.0, 0.0)
+
+    if reduction_basis is None:
+        reduction_basis = taxable_base
 
     standard_irpf: float = 0.0
     for upper_limit, rate, deduction in IRPF_TABLE_2026:
@@ -511,20 +524,17 @@ def calculate_irpf_2026(
             standard_irpf = max(taxable_base * rate - deduction, 0.0)
             break
 
-    # Step 2: Apply the 2026 reducer (Lei nº 15.270/2025)
-    if taxable_base <= IRPF_REDUCER_FULL_EXEMPTION_LIMIT:
-        # Full exemption: zero the tax entirely
+    if reduction_basis <= IRPF_REDUCER_FULL_EXEMPTION_LIMIT:
         reducer_amount: float = standard_irpf
         final_irpf: float = 0.0
-    elif taxable_base <= IRPF_REDUCER_PHASE_OUT_LIMIT:
-        # Phase-out zone: gradual reduction
+    elif reduction_basis <= IRPF_REDUCER_PHASE_OUT_LIMIT:
         reducer_amount = max(
-            IRPF_REDUCER_BASE - (IRPF_REDUCER_FACTOR * taxable_base),
+            IRPF_REDUCER_BASE - (IRPF_REDUCER_FACTOR * reduction_basis),
             0.0,
         )
+        reducer_amount = min(reducer_amount, standard_irpf)
         final_irpf = max(standard_irpf - reducer_amount, 0.0)
     else:
-        # Above phase-out: no reduction
         reducer_amount = 0.0
         final_irpf = standard_irpf
 
@@ -628,13 +638,13 @@ def render_breakdown_bar(results: TaxCalculationResult, width: int = 44) -> Text
         suffix = ""
 
     # Build proportional bar
-    bar = Text()
+    breakdown = Text()
     legend_parts = []
 
     for value, color, label in segments:
         pct = max(value / denominator, 0) if denominator > 0 else 0
         chars = max(round(pct * width), 1 if value > 0 else 0)
-        bar.append("█" * chars, style=color)
+        breakdown.append("█" * chars, style=color)
         if value > 0:
             legend_parts.append(
                 Text.assemble(
@@ -646,7 +656,7 @@ def render_breakdown_bar(results: TaxCalculationResult, width: int = 44) -> Text
     # Compose: bar on one line, legend on the next
     result = Text()
     result.append("  ")
-    result.append_text(bar)
+    result.append_text(breakdown)
     result.append("\n  ")
     for i, part in enumerate(legend_parts):
         result.append_text(part)
@@ -678,6 +688,9 @@ class TaxCalculationResult:
     irpf_standard: float
     irpf_reducer: float
     taxable_base: float
+    irpf_deduction_model: str
+    irpf_deduction_total: float
+    irpf_reduction_basis: float
     irpf_deductions: dict[str, float]
     bracket_warning: str
     available_dividends: float
@@ -740,28 +753,26 @@ def calculate_taxes(
     # Step 5: DAS tax (monthly Simples Nacional tax on gross revenue)
     estimated_das: float = gross_revenue_brl * DAS_TAX_RATE
 
-    # Step 6: IRPF — Calculate taxable base with deductions, then apply
-    #          the 2026 progressive table + Lei nº 15.270/2025 reducer
-    #
-    # Deduction order (all subtracted from Pró-labore to get taxable base):
-    #   1. INSS (mandatory, automatic)
-    #   2. Dependents (R$ 189,59 per dependent)
-    #   3. PGBL (capped at 12% of Pró-labore)
-    #   4. Alimony (full amount, court-ordered)
     dependent_deduction: float = num_dependents * IRPF_DEPENDENT_DEDUCTION
     pgbl_capped: float = min(pgbl_contribution, ideal_pro_labore * 0.12)
     alimony_applied: float = max(alimony, 0.0)
-
-    taxable_base: float = (
-        ideal_pro_labore
-        - inss_tax
-        - dependent_deduction
-        - pgbl_capped
-        - alimony_applied
+    legal_deduction_total = (
+        inss_tax + dependent_deduction + pgbl_capped + alimony_applied
     )
-    taxable_base = max(taxable_base, 0.0)  # Cannot go negative
 
-    standard_irpf, reducer_amount, final_irpf = calculate_irpf_2026(taxable_base)
+    if IRPF_SIMPLIFIED_DEDUCTION > legal_deduction_total:
+        irpf_deduction_model = "Simplified"
+        irpf_deduction_total = IRPF_SIMPLIFIED_DEDUCTION
+    else:
+        irpf_deduction_model = "Legal"
+        irpf_deduction_total = legal_deduction_total
+
+    taxable_base = max(ideal_pro_labore - irpf_deduction_total, 0.0)
+
+    standard_irpf, reducer_amount, final_irpf = calculate_irpf_2026(
+        taxable_base,
+        reduction_basis=ideal_pro_labore,
+    )
 
     # IRPF status label for display
     if final_irpf == 0.0:
@@ -808,11 +819,16 @@ def calculate_taxes(
         irpf_standard=standard_irpf,
         irpf_reducer=reducer_amount,
         taxable_base=taxable_base,
+        irpf_deduction_model=irpf_deduction_model,
+        irpf_deduction_total=irpf_deduction_total,
+        irpf_reduction_basis=ideal_pro_labore,
         irpf_deductions={
             "inss": inss_tax,
             "dependents": dependent_deduction,
             "pgbl": pgbl_capped,
             "alimony": alimony_applied,
+            "simplified": IRPF_SIMPLIFIED_DEDUCTION,
+            "applied_total": irpf_deduction_total,
         },
         bracket_warning=bracket_warning,
         available_dividends=available_dividends,
@@ -1126,6 +1142,13 @@ def display_results(
         Text("IRPF Taxable Base", style="label.dim"),
         Text(format_brl(taxable_base), style="label.dim"),
     )
+    table.add_row(
+        Text("IRPF Deduction Mode", style="label.dim"),
+        Text(
+            f"{results.irpf_deduction_model} ({format_brl(results.irpf_deduction_total)})",
+            style="label.dim",
+        ),
+    )
     if irpf_tax > 0:
         table.add_row(
             "IRPF (Lei 15.270/2025)",
@@ -1355,8 +1378,10 @@ def display_footer(console: Console) -> None:
     console.print(Rule(title="⚖️  Disclaimer", style="border.dim"))
     console.print(
         Text(
-            "  Estimates for planning purposes only. Always consult a "
-            "qualified Brazilian accountant (contador) for official filings.",
+            "  Estimates for planning purposes only. PGDAS-D and DAS filings still "
+            "depend on rolling 12-month revenue, payroll history, and municipal "
+            "licensing facts. Always consult a qualified Brazilian accountant "
+            "(contador) for official filings.",
             style="label.dim",
         )
     )
