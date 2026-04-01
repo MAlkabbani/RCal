@@ -580,7 +580,7 @@ def format_pct(value: float) -> str:
 # ──────────────────────────────────────────────────────────────────
 
 
-def render_breakdown_bar(results: TaxCalculationResult, width: int = 44) -> Text:
+def render_breakdown_bar(results: "TaxCalculationResult", width: int = 44) -> Text:
     """Render a proportional stacked bar showing how revenue is split.
 
     Uses Unicode block characters (█) to create a stacked horizontal
