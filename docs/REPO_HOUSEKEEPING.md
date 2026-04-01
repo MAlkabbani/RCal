@@ -5,7 +5,6 @@ This plan lists candidates to move out of the public repository surface into a l
 ## Keep in repository
 
 - `README.md`
-- `PRD.md`
 - `CHANGELOG.md`
 - `LICENSE`
 - `CONTRIBUTING.md`
@@ -28,7 +27,9 @@ This plan lists candidates to move out of the public repository surface into a l
 - `docs/walkthrough.md`
   - Development chronology is useful internally but can distract from core user docs.
 - `docs/COMPLIANCE_AUDIT.md`
-  - Internal audit artifact; consider summarizing key boundaries in README/PRD and archiving full note.
+  - Internal audit artifact; consider summarizing key boundaries in README and `docs/AI_REFERENCE_DOC.md` before archiving.
+- `PRD.md`
+  - Product planning artifact can be kept in `local_archive/` when the repo favors a lean public doc surface.
 - `.vscode/launch.json`
   - Editor-specific convenience profile, optional for public repository.
 - `.vscode/settings.json`
@@ -40,7 +41,7 @@ This plan lists candidates to move out of the public repository surface into a l
 
 1. Move essential compliance boundaries from `docs/COMPLIANCE_AUDIT.md` into:
    - `README.md` limitations section
-   - `PRD.md` assumptions and scope section
+   - `docs/AI_REFERENCE_DOC.md` assumptions and scope notes
 2. Keep one concise developer doc map in README.
 3. Move historical/development narrative docs to `local_archive/docs/`.
 
