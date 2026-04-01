@@ -171,8 +171,8 @@ class TestHighRevenueScenario(unittest.TestCase):
     INSS: R$ 885,50 (11% of R$ 8.050)
     Taxable base: R$ 8.050 - R$ 885,50 = R$ 7.164,50
     → Falls in 27.5% bracket: 7164.50 × 0.275 - 908.73 = R$ 1.061,51
-    → No 2026 reducer applies because the gross taxable income is R$ 8.050,00
-        which is above the R$ 7.350,00 reduction ceiling.
+    → No 2026 reducer applies because gross salary R$ 8.050,00 exceeds
+        the R$ 7.350,00 ceiling.
     """
 
     def setUp(self) -> None:
@@ -201,7 +201,8 @@ class TestHighRevenueScenario(unittest.TestCase):
         """Verify the exact IRPF value when the gross salary exceeds R$ 7.350.
 
         Standard table: 7164.50 × 0.275 - 908.73 = 1061.5075
-        Final: 1061.5075
+        Final: 1061.5075 (no reduction applies because gross salary
+        R$ 8.050,00 exceeds R$ 7.350,00 ceiling)
         """
         self.assertAlmostEqual(self.results.irpf_tax, 1061.51, places=2)
 

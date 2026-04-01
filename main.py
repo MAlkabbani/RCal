@@ -190,7 +190,7 @@ IRPF_DEPENDENT_DEDUCTION: float = 189.59
 Applied before computing the taxable base."""
 
 IRPF_SIMPLIFIED_DEDUCTION: float = 607.20
-"""Optional monthly simplified deduction for IRRF in 2026 (R$ 607,20).
+"""Optional monthly simplified deduction for IRPF in 2026 (R$ 607,20).
 This replaces the legal deductions whenever it is more favorable."""
 
 IRPF_REDUCER_FULL_EXEMPTION_LIMIT: float = 5_000.00
