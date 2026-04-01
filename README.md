@@ -1,16 +1,13 @@
 # 🧮 RCal — Simples Nacional Planning CLI
-<br>
 
-<div align="center">
-  <pre>
+```text
   ██████╗   ██████╗  █████╗  ██╗
   ██╔══██╗ ██╔════╝ ██╔══██╗ ██║
   ██████╔╝ ██║      ███████║ ██║
   ██╔══██╗ ██║      ██╔══██║ ██║
   ██║  ██║ ╚██████╗ ██║  ██║ ███████╗
   ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝
-  </pre>
-</div>
+```
 
 RCal is a standalone Python terminal calculator for Brazilian micro and small businesses under Simples Nacional, focused on founder-operated Ltda/SLU service exporters using Fator R planning.
 
@@ -22,50 +19,6 @@ It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-
 - 🎯 Built for fast what-if comparisons across revenue and exchange-rate changes
 - 🧾 Clear breakdown of Pró-labore, INSS, IRPF, DAS, dividends, and net take-home
 - 💾 Remembers your last inputs for faster monthly planning
-
-## 🖥️ CLI Preview (Partial)
-
-Here is an example of the terminal output you can expect when running a calculation:
-
-```ansi
-[36m┌────────────────────────────────────────────────────────────────────┐[0m
-[36m│[0m [32mMemory cleared! Saved state wiped.                                 [0m[36m│[0m
-[36m│[0m [33mCurrent Month/Year[0m (MM/YYYY) (04/2026): [37m04/2026[0m                    [36m│[0m
-[36m│[0m [33mMonthly Revenue in USD[0m (0 = zero-revenue advisory): [37m883[0m            [36m│[0m
-[36m│[0m [33mUSD -> BRL Exchange Rate:[0m [37m5.237[0m                                    [36m│[0m
-[36m│[0m [33mApply IRPF deductions?[0m (dependents, PGBL, alimony) [36m[y/n]:[0m [37mn[0m        [36m│[0m
-[36m└────────────────────────────────────────────────────────────────────┘[0m
-
-[36m┌───────────────┐  ┌─────────────────┐  ┌─────────────┐[0m
-[36m│[0m 📅 Month      [36m│[0m  [36m│[0m 💰 Revenue      [36m│[0m  [36m│[0m ⚙️ Rate     [36m│[0m
-[36m│[0m   04/2026     [36m│[0m  [36m│[0m   US$ 883.00    [36m│[0m  [36m│[0m   R$ 5.2370 [36m│[0m
-[36m└───────────────┘  └─────────────────┘  └─────────────┘[0m
-
-[36m┌────────────────────────────────────────────────────────────────────┐[0m
-[36m│[0m 📊 Tax Breakdown                                                   [36m│[0m
-[36m├───────────────────────────────┬────────────────────────────────────┤[0m
-[36m│[0m [37mItem                          [0m[36m│[0m [33mValue                              [0m[36m│[0m
-[36m├───────────────────────────────┼────────────────────────────────────┤[0m
-[36m│[0m Gross Revenue (BRL)           [36m│[0m [36mR$ 4.624,27                        [0m[36m│[0m
-[36m│[0m Fator R Minimum (28%)         [36m│[0m [36mR$ 1.294,80                        [0m[36m│[0m
-[36m│[0m [33mIdeal Pró-labore              [0m[36m│[0m [33mR$ 1.621,00                        [0m[36m│[0m
-[36m│[0m INSS (11%)                    [36m│[0m [31m- R$ 178,31                        [0m[36m│[0m
-[36m│[0m DAS (Simples Nacional)        [36m│[0m [31m- R$ 141,23                        [0m[36m│[0m
-[36m│[0m IRPF Taxable Base             [36m│[0m [36mR$ 1.013,80                        [0m[36m│[0m
-[36m│[0m IRPF Deduction Mode           [36m│[0m Simplified ([36mR$ 607,20[0m)             [36m│[0m
-[36m│[0m IRPF Status                   [36m│[0m ✅ [32mTax Free                         [0m[36m│[0m
-[36m└───────────────────────────────┴────────────────────────────────────┘[0m
-
-[36m┌────────────────────────────────────────────────────────────────────┐[0m
-[36m│[0m 💰 Your Bottom Line                                                [36m│[0m
-[36m│[0m   Tax-Free Dividends        [36mR$ 2.862,05                            [0m[36m│[0m
-[36m│[0m   Net Take-Home             [34;1mR$ 4.304,74                            [0m[36m│[0m
-[36m│[0m   Effective Tax Burden            [33m6.9%                             [0m[36m│[0m
-[36m│[0m                                                                    [36m│[0m
-[36m│[0m   Revenue Distribution:                                            [36m│[0m
-[36m│[0m   [ [33mSalary 31%[0m | [31mINSS 4%[0m | [36mDAS 3%[0m | [32mYours 62%[0m ]                    [36m│[0m
-[36m└────────────────────────────────────────────────────────────────────┘[0m
-```
 
 ## ✨ Key Features
 
