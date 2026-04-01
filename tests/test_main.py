@@ -26,7 +26,7 @@ from unittest.mock import patch
 
 from rich.prompt import InvalidResponse
 
-from main import (
+from rcal.main import (
     DAS_TAX_RATE,
     FATOR_R_TARGET,
     INSS_CEILING,
@@ -851,7 +851,7 @@ class TestStatePersistence(unittest.TestCase):
         """Create a temporary state file path for each test."""
         self.tmp_dir = tempfile.mkdtemp()
         self.tmp_state = Path(self.tmp_dir) / ".rcal_state.json"
-        self.patcher = patch("main.STATE_FILE", self.tmp_state)
+        self.patcher = patch("rcal.main.STATE_FILE", self.tmp_state)
         self.patcher.start()
 
     def tearDown(self) -> None:
@@ -1296,21 +1296,21 @@ class TestEdgeCases(unittest.TestCase):
 class TestCLI(unittest.TestCase):
     """Test the CLI UI components using unittest.mock."""
 
-    @patch("main.Console")
+    @patch("rcal.main.Console")
     def test_display_header(self, mock_console_cls) -> None:
         """Test that the application header renders without error."""
-        from main import display_header
+        from rcal.main import display_header
 
         console = mock_console_cls()
         display_header(console)
         self.assertTrue(console.print.called)
 
-    @patch("main.MonthYearPrompt.ask", return_value="03/2026")
-    @patch("main.NonNegativeFloatPrompt.ask", return_value=1000.0)
-    @patch("main.PositiveFloatPrompt.ask", return_value=5.0)
+    @patch("rcal.main.MonthYearPrompt.ask", return_value="03/2026")
+    @patch("rcal.main.NonNegativeFloatPrompt.ask", return_value=1000.0)
+    @patch("rcal.main.PositiveFloatPrompt.ask", return_value=5.0)
     def test_collect_inputs(self, mock_rate, mock_rev, mock_month) -> None:
         """Test base input collection prompt parsing."""
-        from main import collect_inputs
+        from rcal.main import collect_inputs
         from unittest.mock import MagicMock
 
         console = MagicMock()
@@ -1319,14 +1319,14 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(rev, 1000.0)
         self.assertEqual(rate, 5.0)
 
-    @patch("main.PositiveFloatPrompt.ask", return_value=5.5)
-    @patch("main.NonNegativeFloatPrompt.ask", return_value=1000.0)
-    @patch("main.MonthYearPrompt.ask", return_value="03/2026")
+    @patch("rcal.main.PositiveFloatPrompt.ask", return_value=5.5)
+    @patch("rcal.main.NonNegativeFloatPrompt.ask", return_value=1000.0)
+    @patch("rcal.main.MonthYearPrompt.ask", return_value="03/2026")
     def test_collect_inputs_with_prev_rate(
         self, mock_month, mock_rev, mock_rate
     ) -> None:
         """Test input collection using previous rate skips rate prompt."""
-        from main import collect_inputs
+        from rcal.main import collect_inputs
         from unittest.mock import MagicMock
 
         console = MagicMock()
@@ -1335,14 +1335,14 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(rev, 1000.0)
         self.assertEqual(rate, 5.5)
 
-    @patch("main.PositiveFloatPrompt.ask", return_value=5.1)
-    @patch("main.NonNegativeFloatPrompt.ask", return_value=1500.0)
-    @patch("main.MonthYearPrompt.ask", return_value="01/2026")
+    @patch("rcal.main.PositiveFloatPrompt.ask", return_value=5.1)
+    @patch("rcal.main.NonNegativeFloatPrompt.ask", return_value=1500.0)
+    @patch("rcal.main.MonthYearPrompt.ask", return_value="01/2026")
     def test_collect_inputs_with_saved_state(
         self, mock_month, mock_rev, mock_rate
     ) -> None:
         """Test input collection uses saved_state defaults."""
-        from main import collect_inputs
+        from rcal.main import collect_inputs
         from unittest.mock import MagicMock
 
         console = MagicMock()
@@ -1352,12 +1352,12 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(rev, 1500.0)
         self.assertEqual(rate, 5.1)
 
-    @patch("main.Confirm.ask", return_value=True)
-    @patch("main.NonNegativeIntPrompt.ask", return_value=1)
-    @patch("main.NonNegativeFloatPrompt.ask", side_effect=[500.0, 100.0])
+    @patch("rcal.main.Confirm.ask", return_value=True)
+    @patch("rcal.main.NonNegativeIntPrompt.ask", return_value=1)
+    @patch("rcal.main.NonNegativeFloatPrompt.ask", side_effect=[500.0, 100.0])
     def test_collect_deductions_yes(self, mock_float, mock_int, mock_confirm) -> None:
         """Test full deduction collection path."""
-        from main import collect_deductions
+        from rcal.main import collect_deductions
         from unittest.mock import MagicMock
 
         console = MagicMock()
@@ -1366,10 +1366,10 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(pgbl, 500.0)
         self.assertEqual(ali, 100.0)
 
-    @patch("main.Confirm.ask", return_value=False)
+    @patch("rcal.main.Confirm.ask", return_value=False)
     def test_collect_deductions_no(self, mock_confirm) -> None:
         """Test skipping deduction collection path."""
-        from main import collect_deductions
+        from rcal.main import collect_deductions
         from unittest.mock import MagicMock
 
         console = MagicMock()
@@ -1378,10 +1378,10 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(pgbl, 0.0)
         self.assertEqual(ali, 0.0)
 
-    @patch("main.Console")
+    @patch("rcal.main.Console")
     def test_display_results(self, mock_console) -> None:
         """Test displaying taxes works for varying logic branches."""
-        from main import display_results
+        from rcal.main import display_results
 
         results = calculate_taxes(1000.0, 5.0)
         display_results(mock_console, "03/2026", 1000.0, 5.0, results)
@@ -1399,28 +1399,28 @@ class TestCLI(unittest.TestCase):
         results_low = calculate_taxes(100.0, 5.0)
         display_results(mock_console, "03/2026", 100.0, 5.0, results_low)
 
-    @patch("main.Console")
+    @patch("rcal.main.Console")
     def test_display_footer(self, mock_console) -> None:
         """Test footer display renders without error."""
-        from main import display_footer
+        from rcal.main import display_footer
 
         display_footer(mock_console)
         self.assertTrue(mock_console.print.called)
 
-    @patch("main.Confirm.ask", return_value=False)
+    @patch("rcal.main.Confirm.ask", return_value=False)
     def test_prompt_next_action_no(self, mock_confirm) -> None:
         """Test user rejecting continuation loop returns None."""
-        from main import prompt_next_action
+        from rcal.main import prompt_next_action
         from unittest.mock import MagicMock
 
         console = MagicMock()
         self.assertIsNone(prompt_next_action(console))
 
-    @patch("main.Confirm.ask", return_value=True)
-    @patch("main.Prompt.ask", side_effect=["1", "2", "3", "4"])
+    @patch("rcal.main.Confirm.ask", return_value=True)
+    @patch("rcal.main.Prompt.ask", side_effect=["1", "2", "3", "4"])
     def test_prompt_next_action_choices(self, mock_prompt, mock_confirm) -> None:
         """Test all 4 loop choice routes return correct keys."""
-        from main import prompt_next_action
+        from rcal.main import prompt_next_action
         from unittest.mock import MagicMock
 
         console = MagicMock()
@@ -1429,16 +1429,17 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(prompt_next_action(console), "rate")
         self.assertEqual(prompt_next_action(console), "clear")
 
-    @patch("main.NonNegativeFloatPrompt.ask", return_value=800.0)
-    @patch("main.PositiveFloatPrompt.ask", return_value=6.0)
-    @patch("main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
-    @patch("main.collect_deductions", return_value=(0, 0.0, 0.0))
+    @patch("rcal.main.NonNegativeFloatPrompt.ask", return_value=800.0)
+    @patch("rcal.main.PositiveFloatPrompt.ask", return_value=6.0)
+    @patch("rcal.main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
+    @patch("rcal.main.collect_deductions", return_value=(0, 0.0, 0.0))
     @patch(
-        "main.prompt_next_action", side_effect=["all", "revenue", "rate", "clear", None]
+        "rcal.main.prompt_next_action",
+        side_effect=["all", "revenue", "rate", "clear", None],
     )
-    @patch("main.display_results")
-    @patch("main.display_header")
-    @patch("main.time.sleep")
+    @patch("rcal.main.display_results")
+    @patch("rcal.main.display_header")
+    @patch("rcal.main.time.sleep")
     def test_main_loop_branches(
         self,
         mock_sleep,
@@ -1451,47 +1452,47 @@ class TestCLI(unittest.TestCase):
         mock_nn_rev_prompt,
     ) -> None:
         """Walk through all loop paths in main() to hit 100% coverage."""
-        from main import main as rcal_main
+        from rcal.main import main as rcal_main
 
         rcal_main()
         self.assertEqual(mock_input.call_count, 3)
         self.assertEqual(mock_deduct.call_count, 5)
         self.assertEqual(mock_results.call_count, 5)
 
-    @patch("main.clear_state", return_value=False)
-    @patch("main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
-    @patch("main.collect_deductions", return_value=(0, 0.0, 0.0))
-    @patch("main.prompt_next_action", side_effect=["clear", None])
-    @patch("main.display_results")
-    @patch("main.display_header")
-    @patch("main.time.sleep")
+    @patch("rcal.main.clear_state", return_value=False)
+    @patch("rcal.main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
+    @patch("rcal.main.collect_deductions", return_value=(0, 0.0, 0.0))
+    @patch("rcal.main.prompt_next_action", side_effect=["clear", None])
+    @patch("rcal.main.display_results")
+    @patch("rcal.main.display_header")
+    @patch("rcal.main.time.sleep")
     def test_main_loop_clear_failed(self, *mocks) -> None:
         """Test the 'clear' path when there is no state."""
-        from main import main as rcal_main
+        from rcal.main import main as rcal_main
 
         rcal_main()
 
-    @patch("main.Path.write_text", side_effect=OSError("Permission denied"))
+    @patch("rcal.main.Path.write_text", side_effect=OSError("Permission denied"))
     def test_save_state_oserror(self, mock_write) -> None:
         """Test save_state gracefully handles OSError."""
-        from main import save_state
+        from rcal.main import save_state
 
         save_state("03/2026", 1000.0, 5.0)
 
-    @patch("main.Path.unlink", side_effect=OSError("Permission denied"))
-    @patch("main.Path.exists", return_value=True)
+    @patch("rcal.main.Path.unlink", side_effect=OSError("Permission denied"))
+    @patch("rcal.main.Path.exists", return_value=True)
     def test_clear_state_oserror(self, mock_exists, mock_unlink) -> None:
         """Test clear_state gracefully handles OSError."""
-        from main import clear_state
+        from rcal.main import clear_state
 
         self.assertFalse(clear_state())
 
-    @patch("main.Console")
-    @patch("main.load_state", return_value={"month_year": "01/2026"})
-    @patch("main.collect_inputs", side_effect=KeyboardInterrupt)
+    @patch("rcal.main.Console")
+    @patch("rcal.main.load_state", return_value={"month_year": "01/2026"})
+    @patch("rcal.main.collect_inputs", side_effect=KeyboardInterrupt)
     def test_main_keyboard_interrupt(self, mock_input, mock_load, mock_console) -> None:
         """Test graceful exit on Ctrl+C."""
-        from main import main as rcal_main
+        from rcal.main import main as rcal_main
 
         rcal_main()
         self.assertTrue(mock_console().print.called)

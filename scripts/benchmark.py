@@ -2,7 +2,7 @@
 import argparse
 import time
 
-from main import calculate_taxes
+from rcal.main import calculate_taxes
 
 SCENARIOS: tuple[tuple[float, float], ...] = (
     (0.0, 5.00),

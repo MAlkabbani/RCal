@@ -21,22 +21,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -e .
+          pip install -r requirements-dev.txt
 
       - name: Black
-        run: black --check main.py test_main.py benchmark.py backup_workspace.py
+        run: black --check src/rcal tests scripts
 
       - name: Flake8
-        run: flake8 --max-line-length=88 --extend-ignore=E203,E501 main.py test_main.py benchmark.py backup_workspace.py
+        run: flake8 --max-line-length=88 --extend-ignore=E203,E501 src/rcal tests scripts
 
       - name: Pylint
-        run: pylint main.py test_main.py benchmark.py backup_workspace.py
+        run: pylint src/rcal tests scripts
 
       - name: Mypy
-        run: mypy main.py test_main.py benchmark.py backup_workspace.py
+        run: mypy src/rcal tests scripts
 
       - name: Pytest
-        run: pytest test_main.py -v
+        run: pytest tests -v
 
       - name: Benchmark smoke
-        run: python benchmark.py --iterations 1000
+        run: python scripts/benchmark.py --iterations 1000

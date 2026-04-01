@@ -26,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 VENV_DIR="$SCRIPT_DIR/.venv"
 REQUIREMENTS="$SCRIPT_DIR/requirements.txt"
-MAIN_SCRIPT="$SCRIPT_DIR/main.py"
+MAIN_SCRIPT="$SCRIPT_DIR/src/rcal/main.py"
 PYTHON=""
 
 # ── Find a working Python 3 interpreter ──────────────────────────
@@ -66,14 +66,14 @@ ensure_venv() {
     fi
 }
 
-# ── Install dependencies if missing ─────────────────────────────
-ensure_deps() {
-    # Quick check: try importing rich. If it fails, install.
-    if ! "$VENV_DIR/bin/python" -c "import rich" &>/dev/null; then
-        echo "  📦  Installing dependencies..."
+# ── Install the package if missing ─────────────────────────────
+ensure_package() {
+    # Quick check: try importing rcal. If it fails, install.
+    if ! "$VENV_DIR/bin/python" -c "import rcal" &>/dev/null; then
+        echo "  📦  Installing package and dependencies..."
         "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-        "$VENV_DIR/bin/pip" install --quiet -r "$REQUIREMENTS"
-        echo "  ✅  Dependencies installed."
+        "$VENV_DIR/bin/pip" install --quiet -e "$SCRIPT_DIR"
+        echo "  ✅  Installation complete."
         echo ""
     fi
 }
@@ -81,8 +81,7 @@ ensure_deps() {
 # ── Main ─────────────────────────────────────────────────────────
 find_python
 ensure_venv
-ensure_deps
+ensure_package
 
-# Launch the application using the venv's Python interpreter
-# Pass through any command-line arguments (future-proofing)
-exec "$VENV_DIR/bin/python" "$MAIN_SCRIPT" "$@"
+# Launch the application using the installed entry point
+exec "$VENV_DIR/bin/rcal" "$@"

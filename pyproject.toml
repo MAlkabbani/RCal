@@ -1,17 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rcal"
+version = "3.2.3"
+description = "Brazilian Simples Nacional Tax Calculator for tech service exporters"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "RCal Contributors"}
+]
+keywords = ["brazil", "tax", "calculator", "simples-nacional", "fator-r"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+rcal = "rcal.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=main --cov-report=term-missing --cov-fail-under=100"
+testpaths = ["tests"]
+addopts = "--cov=rcal --cov-report=term-missing --cov-fail-under=100"
 
 [tool.mypy]
 python_version = "3.10"
 pretty = true
 show_error_codes = true
+mypy_path = "src"
 
 [tool.pylint.main]
 fail-under = 10.0
+source-roots = ["src"]
 
 [tool.pylint.messages_control]
 disable = [

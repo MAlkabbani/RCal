@@ -4,6 +4,27 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [3.2.3] — 2026-04-01
+
+### 📦 Professional Packaging & Restructuring
+
+The project has been refactored into a standard Python package structure to support modern distribution, better maintainability, and automated release workflows.
+
+### Added
+
+- **Standard `src/` Layout** — Moved core logic to `src/rcal/main.py` and initialized the `rcal` package.
+- **Modern `pyproject.toml`** — Added `[project]` metadata, dependencies, and `[project.scripts]` to support `pip install rcal`.
+- **Dedicated `tests/` and `scripts/`** — Separated test suite and developer tools from the package source.
+- **Entry Point Support** — The application can now be launched via the `rcal` command after installation.
+
+### Changed
+
+- **`rcal` Launcher** — Updated to install the local package in editable mode (`-e .`) and run via the new entry point.
+- **QA & CI Workflows** — Updated `qa.sh` and GitHub Actions to reflect the new directory structure and package-based installation.
+- **README** — Updated project layout, quick start, and manual setup instructions for the new structure.
+
+---
+
 ## [3.2.2] — 2026-04-01
 
 ### 📚 Final Docs Surface Trim

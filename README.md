@@ -69,16 +69,17 @@ The `./rcal` launcher automatically:
 
 - Finds Python 3
 - Creates `.venv` if missing
-- Installs runtime dependencies from `requirements.txt`
-- Runs `main.py`
+- Installs runtime dependencies
+- Installs the `rcal` package in editable mode
+- Runs `rcal` via the installed entry point
 
 ## 🛠️ Manual setup
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-python3 main.py
+pip install -e .
+rcal
 ```
 
 ## 💻 CLI usage flow
@@ -117,19 +118,21 @@ After each calculation:
 
 ```text
 RCal/
-├── rcal
-├── main.py
-├── test_main.py
-├── qa.sh
-├── benchmark.py
-├── backup_workspace.py
+├── rcal                # Shell launcher
+├── src/rcal/           # Main package
+│   ├── __init__.py
+│   └── main.py         # Tax logic and CLI
+├── tests/              # Test suite
+│   └── test_main.py
+├── scripts/            # Dev tools
+│   ├── benchmark.py
+│   └── backup_workspace.py
+├── qa.sh               # Full QA pipeline
 ├── requirements.txt
-├── pyproject.toml
+├── requirements-dev.txt
+├── pyproject.toml      # Modern packaging
 ├── CHANGELOG.md
-└── docs/
-    ├── AI_REFERENCE_DOC.md
-    ├── COMPLIANCE_AUDIT.md
-    └── COMPLIANCE_ZERO_REVENUE.md
+└── docs/               # Tax context
 ```
 
 ## ✅ Development and QA
