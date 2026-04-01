@@ -9,6 +9,8 @@
   ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝
 ```
 
+![Brand](https://img.shields.io/badge/brand-%2300b4d8) ![Positive](https://img.shields.io/badge/positive-%232ec4b6) ![Negative](https://img.shields.io/badge/negative-%23e63946) ![Highlight](https://img.shields.io/badge/highlight-%23f4a261) ![Border](https://img.shields.io/badge/border-%23457b9d)
+
 RCal is a standalone Python terminal calculator for Brazilian micro and small businesses under Simples Nacional, focused on founder-operated Ltda/SLU service exporters using Fator R planning.
 
 It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-home under the repository's current assumptions.
@@ -60,6 +62,8 @@ See source constants in `main.py` and regulatory notes in `docs/`.
 ## 👀 CLI Preview (partial view)
 
 ```text
+[Theme: brand #00b4d8 · positive #2ec4b6 · negative #e63946 · highlight #f4a261]
+
 🗑️ Memory cleared! Saved state wiped.
 
 📅 Current Month/Year (MM/YYYY) (04/2026): 04/2026
@@ -68,22 +72,27 @@ See source constants in `main.py` and regulatory notes in `docs/`.
 
 📝 Apply IRPF deductions? (dependents, PGBL, alimony) [y/n]: n
 
-Month: 04/2026    Revenue: US$ 883.00    Rate: R$ 5.237
+╭─── 📅 Month ───╮ ╭──── 💵 Revenue ────╮ ╭─── 💱 Rate ────╮
+│    04/2026     │ │     US$ 883.00     │ │    R$ 5.237    │
+╰────────────────╯ ╰────────────────────╯ ╰────────────────╯
 
-📊 Tax Breakdown
-- Gross Revenue (BRL):          R$ 4.624,27
-- Fator R Minimum (28%):        R$ 1.294,80
-- ✨ Ideal Pró-labore:          R$ 1.621,00
-- INSS (11%):                 - R$ 178,31
-- DAS (Simples Nacional):     - R$ 141,23
-- IRPF Taxable Base:            R$ 1.013,80
-- IRPF Deduction Mode:          Simplified (R$ 607,20)
-- IRPF Status:                  ✅ Tax Free
+╭──────────────── 📊 Tax Breakdown ────────────────╮
+│ Gross Revenue (BRL)                     R$ 4.624,27 │
+│ Fator R Minimum (28%)                   R$ 1.294,80 │
+│ ✨ Ideal Pró-labore                     R$ 1.621,00 │
+│ INSS (11%)                            - R$   178,31 │
+│ DAS (Simples Nacional)                - R$   141,23 │
+│ IRPF Taxable Base                       R$ 1.013,80 │
+│ IRPF Deduction Mode          Simplified (R$ 607,20) │
+│ IRPF Status                                ✅ Tax Free │
+╰──────────────────────────────────────────────────────╯
 
-💰 Your Bottom Line
-- 📦 Tax-Free Dividends:         R$ 2.862,05
-- 🏠 Net Take-Home:              R$ 4.304,74
-- 📉 Effective Tax Burden:       6.9%
+╭────────────── 💰 Your Bottom Line ──────────────╮
+│ 📦 Tax-Free Dividends                  R$ 2.862,05 │
+│ 🏠 Net Take-Home                       R$ 4.304,74 │
+│ 📉 Effective Tax Burden                      6.9%   │
+│ Revenue Distribution: 🟧 Salary · 🟥 INSS/DAS · 🟦 Yours │
+╰───────────────────────────────────────────────────╯
 ```
 
 This is a text preview. In the real terminal app, the output is colorized with Rich panels, borders, and a distribution bar.
