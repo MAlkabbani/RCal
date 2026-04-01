@@ -1,6 +1,6 @@
 # Zero-Revenue Compliance: Brazilian Legal Requirements
 
-This document serves as the canonical reference for the regulatory rules encoded in RCal's zero-revenue advisory system. It outlines the obligations for a **solopreneur (sole owner-administrator, no employees)** under **Simples Nacional, Anexo III**, specifically in **Florianópolis, SC**.
+This document serves as the canonical reference for the regulatory rules encoded in RCal's zero-revenue advisory system. It outlines the obligations for a **solopreneur (sole owner-administrator, no employees) operating as an SLU (Sociedade Limitada Unipessoal) or traditional Ltda** under **Simples Nacional, Anexo III**, specifically in **Florianópolis, SC**.
 
 ## 1. Pró-labore Obligations (Owner's Salary)
 

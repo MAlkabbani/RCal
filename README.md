@@ -214,7 +214,7 @@ Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
 RCal/
 ├── rcal                 # One-command launcher (bash)
 ├── main.py              # Main application (UI + calculation engine)
-├── test_main.py         # Unit tests (122 tests, 17 test classes)
+├── test_main.py         # Unit tests (145 tests, 18 test classes)
 ├── requirements.txt     # Python dependencies (rich>=13.0.0)
 ├── README.md            # This file
 ├── CHANGELOG.md         # Version history and changes

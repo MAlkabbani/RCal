@@ -4,7 +4,7 @@
 
 ## 1. The Core Business Context
 
-This application is built for Brazilian micro and small businesses (ME/EPP) operating under the **Simples Nacional** tax regime, specifically tailored for tech companies (e.g., software development, website planning/hosting - LC 116/03 Sub-item 01.08) that export services internationally.
+This application is built for Brazilian micro and small businesses (ME/EPP) structured as **Ltda** (Sociedade Limitada) or **SLU** (Sociedade Limitada Unipessoal) operating under the **Simples Nacional** tax regime, specifically tailored for tech companies (e.g., software development, website planning/hosting - LC 116/03 Sub-item 01.08) that export services internationally.
 
 - **Export Exemptions:** Under Brazilian law, the export of services (where the client is abroad and the result of the service is verified abroad) is exempt from municipal ISSQN and federal PIS/COFINS taxes.
 - **The "Fator R" Mechanism:** Tech services typically fall under Anexo V of Simples Nacional (starting at 15.5% tax). However, if the company's payroll (including the administrator's _Pró-labore_) is equal to or greater than **28%** of its gross revenue over the last 12 months, the company is allowed to be taxed under **Anexo III** (starting at 6%).

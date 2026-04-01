@@ -43,6 +43,8 @@ import json
 import math
 import re
 import time
+from dataclasses import dataclass
+from typing import Any, Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -74,16 +76,16 @@ install_rich_traceback(show_locals=True)
 RCAL_THEME = Theme(
     {
         # ─ Primary brand
-        "brand": "bold #00b4d8",          # vivid cyan — the "RCal blue"
-        "brand.dim": "#0096c7",           # deeper cyan, increased brightness from previous
+        "brand": "bold #00b4d8",  # vivid cyan — the "RCal blue"
+        "brand.dim": "#0096c7",  # deeper cyan, increased brightness from previous
         # ─ Semantic money tokens
-        "money.positive": "bold #2ec4b6", # teal-green for income
-        "money.negative": "bold #e63946", # warm red for deductions
+        "money.positive": "bold #2ec4b6",  # teal-green for income
+        "money.negative": "bold #e63946",  # warm red for deductions
         "money.highlight": "bold #f4a261",  # amber for key results
         "money.total": "bold bright_white on #1d3557",  # grand total (higher contrast bg)
         # ─ Text hierarchy
-        "label": "#f8f9fa",               # bright white/gray for maximum readability
-        "label.dim": "#adb5bd",           # medium-light gray (removed 'dim' ANSI flag)
+        "label": "#f8f9fa",  # bright white/gray for maximum readability
+        "label.dim": "#adb5bd",  # medium-light gray (removed 'dim' ANSI flag)
         "heading": "bold bright_white",
         # ─ Status indicators
         "status.ok": "bold #2ec4b6",
@@ -91,10 +93,10 @@ RCAL_THEME = Theme(
         "status.danger": "bold #e63946",
         # ─ Surfaces & borders
         "border.primary": "#00b4d8",
-        "border.dim": "#457b9d",          # brighter border for distinct separation
+        "border.dim": "#457b9d",  # brighter border for distinct separation
         # ─ Input prompts
         "prompt.label": "bold #00b4d8",
-        "prompt.hint": "#adb5bd",         # matches label.dim, bright enough to read easily
+        "prompt.hint": "#adb5bd",  # matches label.dim, bright enough to read easily
     }
 )
 
@@ -170,11 +172,11 @@ taxation instead of the higher Anexo V."""
 
 IRPF_TABLE_2026: list[tuple[float, float, float]] = [
     #  (upper_limit,   rate,     deduction)
-    (2_428.80,         0.000,    0.00),     # Isento
-    (2_826.65,         0.075,    182.16),   # 7.5%
-    (3_751.05,         0.150,    394.16),   # 15%
-    (4_664.68,         0.225,    675.49),   # 22.5%
-    (float("inf"),     0.275,    908.73),   # 27.5%
+    (2_428.80, 0.000, 0.00),  # Isento
+    (2_826.65, 0.075, 182.16),  # 7.5%
+    (3_751.05, 0.150, 394.16),  # 15%
+    (4_664.68, 0.225, 675.49),  # 22.5%
+    (float("inf"), 0.275, 908.73),  # 27.5%
 ]
 """2026 IRPF progressive monthly table (Tabela Progressiva Mensal).
 
@@ -212,7 +214,9 @@ Located in the user's home directory as a hidden file.
 The file is human-readable and can be manually edited or deleted.
 Use the in-app '[4] Clear Memory' option to wipe it cleanly."""
 
-MINIMUM_VIABLE_REVENUE_BRL: float = LEGAL_MINIMUM_WAGE + (LEGAL_MINIMUM_WAGE * DAS_TAX_RATE)
+MINIMUM_VIABLE_REVENUE_BRL: float = LEGAL_MINIMUM_WAGE + (
+    LEGAL_MINIMUM_WAGE * DAS_TAX_RATE
+)
 """Minimum monthly BRL revenue needed to cover minimum Pró-labore + DAS.
 
 Below this threshold (~R$ 1.670,52 for 2026), the company must inject
@@ -234,7 +238,7 @@ FLORIPA_TFF_REFERENCE: str = (
 # ──────────────────────────────────────────────────────────────────
 
 
-def load_state() -> dict[str, float | str | int]:
+def load_state() -> dict[str, Any]:
     """Load the last-used inputs from the persistent state file.
 
     Reads ~/.rcal_state.json and returns a dictionary with keys:
@@ -369,7 +373,7 @@ class PositiveFloatPrompt(FloatPrompt):
     that would break the calculation engine.
     """
 
-    def process_response(self, value: str) -> float:
+    def process_response(self, value: str) -> float:  # type: ignore[override]
         """Validate that the entered value is a positive number.
 
         Args:
@@ -384,9 +388,7 @@ class PositiveFloatPrompt(FloatPrompt):
         try:
             result = float(value)
         except ValueError:
-            raise InvalidResponse(
-                "[status.danger]  ✗ Please enter a valid number.[/]"
-            )
+            raise InvalidResponse("[status.danger]  ✗ Please enter a valid number.[/]")
         if not math.isfinite(result) or result <= 0:
             raise InvalidResponse(
                 "[status.danger]  ✗ Value must be a finite number greater than zero.[/]"
@@ -401,7 +403,7 @@ class NonNegativeIntPrompt(Prompt):
     dependents input where 0 is a valid choice.
     """
 
-    def process_response(self, value: str) -> int:
+    def process_response(self, value: str) -> int:  # type: ignore[override]
         """Validate that the entered value is a non-negative integer.
 
         Args:
@@ -421,9 +423,7 @@ class NonNegativeIntPrompt(Prompt):
                 "[status.danger]  ✗ Please enter a whole number (0 or above).[/]"
             )
         if result < 0:
-            raise InvalidResponse(
-                "[status.danger]  ✗ Value cannot be negative.[/]"
-            )
+            raise InvalidResponse("[status.danger]  ✗ Value cannot be negative.[/]")
         return result
 
 
@@ -435,7 +435,7 @@ class NonNegativeFloatPrompt(FloatPrompt):
     means "no deduction".
     """
 
-    def process_response(self, value: str) -> float:
+    def process_response(self, value: str) -> float:  # type: ignore[override]
         """Validate that the entered value is a non-negative number.
 
         Args:
@@ -450,9 +450,7 @@ class NonNegativeFloatPrompt(FloatPrompt):
         try:
             result = float(value)
         except ValueError:
-            raise InvalidResponse(
-                "[status.danger]  ✗ Please enter a valid number.[/]"
-            )
+            raise InvalidResponse("[status.danger]  ✗ Please enter a valid number.[/]")
         if not math.isfinite(result) or result < 0:
             raise InvalidResponse(
                 "[status.danger]  ✗ Value must be a finite, non-negative number.[/]"
@@ -572,7 +570,7 @@ def format_pct(value: float) -> str:
 # ──────────────────────────────────────────────────────────────────
 
 
-def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Text:
+def render_breakdown_bar(results: TaxCalculationResult, width: int = 44) -> Text:
     """Render a proportional stacked bar showing how revenue is split.
 
     Uses Unicode block characters (█) to create a stacked horizontal
@@ -586,22 +584,22 @@ def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Te
         - Teal:       What you keep (dividends)
 
     Args:
-        results: Dictionary returned by calculate_taxes().
+        results: Dataclass returned by calculate_taxes().
         width: Character width of the bar (default 44).
 
     Returns:
         Rich Text object with the colored stacked bar + legend.
     """
-    gross = results["gross_revenue_brl"]
+    gross = results.gross_revenue_brl
     if gross <= 0:
         return Text("  (No revenue to display)", style="label.dim")
 
     # Segment definitions: (value, color, label)
-    irpf = results.get("irpf_tax", 0.0)
-    pro_labore_net = results["ideal_pro_labore"] - results["inss_tax"] - irpf
-    inss = results["inss_tax"]
-    das = results["estimated_das"]
-    remaining = gross - results["ideal_pro_labore"] - das
+    irpf = results.irpf_tax
+    pro_labore_net = results.ideal_pro_labore - results.inss_tax - irpf
+    inss = results.inss_tax
+    das = results.estimated_das
+    remaining = gross - results.ideal_pro_labore - das
 
     # When dividends are negative, expenses exceed revenue.
     # Normalize against total outflows so the bar stays within width.
@@ -661,9 +659,31 @@ def render_breakdown_bar(results: dict[str, float | str], width: int = 44) -> Te
 # ──────────────────────────────────────────────────────────────────
 # Core Business Logic — Tax Calculation Engine
 #
-# This function is the mathematical heart of RCal. Its signature and
-# return shape MUST NOT change — existing unit tests depend on it.
+# This function is the mathematical heart of RCal. Its signature
+# remains stable, but it now returns a strongly-typed dataclass.
 # ──────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class TaxCalculationResult:
+    """Strongly-typed container for tax calculation results."""
+
+    gross_revenue_brl: float
+    fator_r_minimum: float
+    ideal_pro_labore: float
+    inss_tax: float
+    estimated_das: float
+    irpf_status: str
+    irpf_tax: float
+    irpf_standard: float
+    irpf_reducer: float
+    taxable_base: float
+    irpf_deductions: dict[str, float]
+    bracket_warning: str
+    available_dividends: float
+    total_net_take_home: float
+    is_zero_revenue: bool
+    is_below_viable_threshold: bool
 
 
 def calculate_taxes(
@@ -673,7 +693,7 @@ def calculate_taxes(
     num_dependents: int = 0,
     pgbl_contribution: float = 0.0,
     alimony: float = 0.0,
-) -> dict[str, float | str | dict | bool]:
+) -> TaxCalculationResult:
     """Calculate all tax components for a given monthly revenue.
 
     This function implements the Fator R optimization strategy and,
@@ -733,7 +753,11 @@ def calculate_taxes(
     alimony_applied: float = max(alimony, 0.0)
 
     taxable_base: float = (
-        ideal_pro_labore - inss_tax - dependent_deduction - pgbl_capped - alimony_applied
+        ideal_pro_labore
+        - inss_tax
+        - dependent_deduction
+        - pgbl_capped
+        - alimony_applied
     )
     taxable_base = max(taxable_base, 0.0)  # Cannot go negative
 
@@ -767,35 +791,35 @@ def calculate_taxes(
     # Step 8: Total net take-home
     # (Pró-labore after INSS and IRPF deduction) + (tax-free dividends)
     total_net_take_home: float = (
-        (ideal_pro_labore - inss_tax - final_irpf) + available_dividends
-    )
+        ideal_pro_labore - inss_tax - final_irpf
+    ) + available_dividends
 
-    is_zero_revenue: bool = (gross_revenue_brl == 0.0)
+    is_zero_revenue: bool = gross_revenue_brl == 0.0
     is_below_viable_threshold: bool = gross_revenue_brl < MINIMUM_VIABLE_REVENUE_BRL
 
-    return {
-        "gross_revenue_brl": gross_revenue_brl,
-        "fator_r_minimum": fator_r_minimum,
-        "ideal_pro_labore": ideal_pro_labore,
-        "inss_tax": inss_tax,
-        "estimated_das": estimated_das,
-        "irpf_status": irpf_status,
-        "irpf_tax": final_irpf,
-        "irpf_standard": standard_irpf,
-        "irpf_reducer": reducer_amount,
-        "taxable_base": taxable_base,
-        "irpf_deductions": {
+    return TaxCalculationResult(
+        gross_revenue_brl=gross_revenue_brl,
+        fator_r_minimum=fator_r_minimum,
+        ideal_pro_labore=ideal_pro_labore,
+        inss_tax=inss_tax,
+        estimated_das=estimated_das,
+        irpf_status=irpf_status,
+        irpf_tax=final_irpf,
+        irpf_standard=standard_irpf,
+        irpf_reducer=reducer_amount,
+        taxable_base=taxable_base,
+        irpf_deductions={
             "inss": inss_tax,
             "dependents": dependent_deduction,
             "pgbl": pgbl_capped,
             "alimony": alimony_applied,
         },
-        "bracket_warning": bracket_warning,
-        "available_dividends": available_dividends,
-        "total_net_take_home": total_net_take_home,
-        "is_zero_revenue": is_zero_revenue,
-        "is_below_viable_threshold": is_below_viable_threshold,
-    }
+        bracket_warning=bracket_warning,
+        available_dividends=available_dividends,
+        total_net_take_home=total_net_take_home,
+        is_zero_revenue=is_zero_revenue,
+        is_below_viable_threshold=is_below_viable_threshold,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -816,9 +840,7 @@ def display_header(console: Console) -> None:
     console.print(Align.center(Text(LOGO, style="brand")))
     console.print()
     console.print(
-        Align.center(
-            Text("Simples Nacional Tax Calculator", style="heading")
-        )
+        Align.center(Text("Simples Nacional Tax Calculator", style="heading"))
     )
     console.print(
         Align.center(
@@ -841,7 +863,7 @@ def display_header(console: Console) -> None:
 def collect_inputs(
     console: Console,
     prev_exchange_rate: float | None = None,
-    saved_state: dict[str, float | str] | None = None,
+    saved_state: Mapping[str, Any] | None = None,
 ) -> tuple[str, float, float]:
     """Collect and validate all three user inputs with smart defaults.
 
@@ -868,9 +890,7 @@ def collect_inputs(
     saved = saved_state or {}
 
     # Smart default: saved month or current month/year
-    default_month_year = str(
-        saved.get("month_year", datetime.now().strftime("%m/%Y"))
-    )
+    default_month_year = str(saved.get("month_year", datetime.now().strftime("%m/%Y")))
 
     month_year: str = MonthYearPrompt.ask(
         "[prompt.label]📅 Current Month/Year[/] [prompt.hint](MM/YYYY)[/]",
@@ -915,7 +935,7 @@ def collect_inputs(
 
 def collect_deductions(
     console: Console,
-    saved_state: dict[str, float | str | int] | None = None,
+    saved_state: Mapping[str, Any] | None = None,
 ) -> tuple[int, float, float]:
     """Collect optional IRPF deduction inputs with smart defaults.
 
@@ -966,11 +986,13 @@ def collect_deductions(
 
     # ── Number of dependents ─────────────────────────────────────
     default_dep = int(saved_dependents) if saved_dependents else 0
-    num_dependents: int = NonNegativeIntPrompt.ask(
-        "[prompt.label]👨‍👩‍👧 Number of Dependents[/] "
-        f"[prompt.hint](R$ {IRPF_DEPENDENT_DEDUCTION:,.2f}/each)[/]",
-        console=console,
-        default=default_dep,
+    num_dependents: int = int(
+        NonNegativeIntPrompt.ask(
+            "[prompt.label]👨‍👩‍👧 Number of Dependents[/] "
+            f"[prompt.hint](R$ {IRPF_DEPENDENT_DEDUCTION:,.2f}/each)[/]",
+            console=console,
+            default=default_dep,
+        )
     )
 
     # ── PGBL contribution ────────────────────────────────────────
@@ -1008,7 +1030,7 @@ def display_results(
     month_year: str,
     revenue_usd: float,
     exchange_rate: float,
-    results: dict[str, float | str | dict | bool],
+    results: TaxCalculationResult,
 ) -> None:
     """Render calculation results in a 3-zone visual architecture.
 
@@ -1021,7 +1043,7 @@ def display_results(
         month_year: The reference month/year string (e.g., "03/2026").
         revenue_usd: Original revenue input in USD.
         exchange_rate: USD → BRL exchange rate used.
-        results: Dictionary returned by calculate_taxes().
+        results: Dataclass returned by calculate_taxes().
     """
     console.print()
 
@@ -1035,18 +1057,14 @@ def display_results(
             padding=(0, 1),
         ),
         Panel(
-            Align.center(
-                Text(f"US$ {revenue_usd:,.2f}", style="heading")
-            ),
+            Align.center(Text(f"US$ {revenue_usd:,.2f}", style="heading")),
             title="[label]💵 Revenue[/]",
             border_style="border.dim",
             width=22,
             padding=(0, 1),
         ),
         Panel(
-            Align.center(
-                Text(f"R$ {exchange_rate:,.4f}", style="heading")
-            ),
+            Align.center(Text(f"R$ {exchange_rate:,.4f}", style="heading")),
             title="[label]💱 Rate[/]",
             border_style="border.dim",
             width=18,
@@ -1072,38 +1090,38 @@ def display_results(
     # ─ Revenue
     table.add_row(
         "Gross Revenue (BRL)",
-        Text(format_brl(results["gross_revenue_brl"]), style="money.positive"),
+        Text(format_brl(results.gross_revenue_brl), style="money.positive"),
     )
 
     # ─ Salary Strategy
     table.add_row(
         Text("Fator R Minimum (28%)", style="label.dim"),
-        Text(format_brl(results["fator_r_minimum"]), style="label.dim"),
+        Text(format_brl(results.fator_r_minimum), style="label.dim"),
     )
     table.add_row(
         Text("✨ Ideal Pró-labore", style="money.highlight"),
-        Text(format_brl(results["ideal_pro_labore"]), style="money.highlight"),
+        Text(format_brl(results.ideal_pro_labore), style="money.highlight"),
     )
 
     # ─ Deductions
     # Show INSS label with "capped" indicator when the ceiling is active
-    inss_capped = results["ideal_pro_labore"] > INSS_CEILING
+    inss_capped = results.ideal_pro_labore > INSS_CEILING
     inss_label = "INSS (11%, capped)" if inss_capped else "INSS (11%)"
     table.add_row(
         inss_label,
-        Text(f"- {format_brl(results['inss_tax'])}", style="money.negative"),
+        Text(f"- {format_brl(results.inss_tax)}", style="money.negative"),
     )
     table.add_row(
         "DAS (Simples Nacional)",
         Text(
-            f"- {format_brl(results['estimated_das'])}",
+            f"- {format_brl(results.estimated_das)}",
             style="money.negative",
         ),
     )
 
     # ─ IRPF
-    irpf_tax = results["irpf_tax"]
-    taxable_base = results["taxable_base"]
+    irpf_tax = results.irpf_tax
+    taxable_base = results.taxable_base
     table.add_row(
         Text("IRPF Taxable Base", style="label.dim"),
         Text(format_brl(taxable_base), style="label.dim"),
@@ -1120,7 +1138,7 @@ def display_results(
         )
 
     # ─ Bracket Warning (conditional)
-    bracket_warn = str(results.get("bracket_warning", ""))
+    bracket_warn = str(results.bracket_warning)
     if bracket_warn:
         table.add_row(
             "📈 Bracket Warning",
@@ -1140,9 +1158,9 @@ def display_results(
     console.print()
 
     # ── Zone 3: Bottom Line Panel ────────────────────────────────
-    dividends = results["available_dividends"]
-    net = results["total_net_take_home"]
-    gross = results["gross_revenue_brl"]
+    dividends = results.available_dividends
+    net = results.total_net_take_home
+    gross = results.gross_revenue_brl
 
     # Build the bottom-line summary table
     bottom_table = Table(
@@ -1169,9 +1187,7 @@ def display_results(
 
     # Effective tax burden percentage (now includes IRPF)
     if gross > 0:
-        total_taxes = (
-            results["inss_tax"] + results["estimated_das"] + results["irpf_tax"]
-        )
+        total_taxes = results.inss_tax + results.estimated_das + results.irpf_tax
         tax_pct = total_taxes / gross
         bottom_table.add_row(
             Text("📉 Effective Tax Burden", style="label"),
@@ -1187,33 +1203,38 @@ def display_results(
         # Explains the problem and offers two actionable options
         warning_content = Text.assemble(
             ("⚠️  Revenue Too Low\n\n", "status.danger"),
-            ("Your monthly revenue (", "label"),
+            (" Your monthly revenue (", "label"),
             (format_brl(gross), "heading"),
             (") is not enough to cover the\n", "label"),
-            ("minimum Pró-labore (", "label"),
-            (format_brl(results["ideal_pro_labore"]), "money.highlight"),
+            (" minimum Pró-labore (", "label"),
+            (format_brl(results.ideal_pro_labore), "money.highlight"),
             (") + DAS tax (", "label"),
-            (format_brl(results["estimated_das"]), "money.negative"),
+            (format_brl(results.estimated_das), "money.negative"),
             (").\n\n", "label"),
-            ("Dividends are negative: ", "label"),
+            (" Dividends are negative: ", "label"),
             (format_brl(dividends), "status.danger"),
-            ("\nThis means the company would need to ", "label"),
+            ("\n This means the company would need to ", "label"),
             ("inject capital", "status.danger"),
             (" to cover expenses.\n\n", "label"),
-            ("━━━ What you can do ━━━\n\n", "status.warn"),
-            ("  ① ", "status.warn"),
+            (" ━━━ What you can do ━━━\n\n", "status.warn"),
+            ("   ① ", "status.warn"),
             ("Increase revenue", "heading"),
             (" — Raise your monthly billing above ", "label"),
-            (format_brl(results["ideal_pro_labore"] + results["estimated_das"]),
-             "money.highlight"),
+            (
+                format_brl(results.ideal_pro_labore + results.estimated_das),
+                "money.highlight",
+            ),
             ("\n     to generate positive dividends.\n\n", "label"),
             ("  ② ", "status.warn"),
             ("Accept minimum wage salary", "heading"),
             (" — At this revenue level the\n", "label"),
             ("     Pró-labore is already at the legal minimum (", "label"),
             (format_brl(LEGAL_MINIMUM_WAGE), "money.highlight"),
-            (").\n     The company must still cover DAS + INSS "
-             "from available funds.\n\n", "label"),
+            (
+                ").\n     The company must still cover DAS + INSS "
+                "from available funds.\n\n",
+                "label",
+            ),
             ("━━━ SC / Florianópolis Reminders ━━━\n\n", "status.warn"),
             ("  📌 ", ""),
             ("PGDAS-D filing", "heading"),
@@ -1224,8 +1245,8 @@ def display_results(
             (" — Florianópolis charges a fixed\n", "label"),
             ("     annual licensing fee regardless of revenue.", "label.dim"),
         )
-        
-        if results.get("is_zero_revenue"):
+
+        if results.is_zero_revenue:
             warning_content = Text.assemble(
                 ("⚠️  Zero Revenue Advisory\n\n", "status.warn"),
                 ("Your company generated no revenue this month.\n\n", "label"),
@@ -1236,7 +1257,10 @@ def display_results(
                 ("     inactive, you do ", "label"),
                 ("not", "status.danger"),
                 (" have to withdraw Pró-labore.\n", "label"),
-                ("     (This means no INSS cost, but no coverage either).\n\n", "label.dim"),
+                (
+                    "     (This means no INSS cost, but no coverage either).\n\n",
+                    "label.dim",
+                ),
                 ("  📌 ", ""),
                 ("DAS is Zero", "status.warn"),
                 (" — Your Simples Nacional tax is legally R$ 0,00.\n\n", "label"),
@@ -1245,7 +1269,10 @@ def display_results(
                 (" — You ", "label"),
                 ("MUST", "status.danger"),
                 (" still file your monthly\n", "label"),
-                ("     declaration informing zero revenue to avoid fines.\n\n", "label"),
+                (
+                    "     declaration informing zero revenue to avoid fines.\n\n",
+                    "label",
+                ),
                 ("  📌 ", ""),
                 ("TFF (Florianópolis)", "status.warn"),
                 (" — Annual municipal licensing fee\n", "label"),
@@ -1370,13 +1397,13 @@ def prompt_next_action(console: Console) -> str | None:
         return None
 
     console.print()
-    console.print(
-        Text("  What would you like to change?", style="heading")
-    )
+    console.print(Text("  What would you like to change?", style="heading"))
     console.print()
     console.print(Text("  [1]  All inputs (month, revenue, rate)", style="label"))
     console.print(Text("  [2]  Only revenue (keep current rate)", style="label"))
-    console.print(Text("  [3]  Only exchange rate (keep current revenue)", style="label"))
+    console.print(
+        Text("  [3]  Only exchange rate (keep current revenue)", style="label")
+    )
     console.print(Text("  [4]  🗑️  Clear memory (wipe saved state)", style="label.dim"))
     console.print()
 
@@ -1461,9 +1488,7 @@ def main() -> None:
                 time.sleep(0.35)
 
             # ── Display Results ─────────────────────────────────
-            display_results(
-                console, month_year, revenue_usd, exchange_rate, results
-            )
+            display_results(console, month_year, revenue_usd, exchange_rate, results)
 
             # ── Persist state to disk ───────────────────────────
             save_state(
@@ -1578,13 +1603,9 @@ def main() -> None:
                     )
                 console.print()
                 # Re-enter all inputs from scratch (no defaults)
-                month_year, revenue_usd, exchange_rate = collect_inputs(
-                    console
-                )
+                month_year, revenue_usd, exchange_rate = collect_inputs(console)
                 # No saved state → deductions default to no
-                num_dependents, pgbl, alimony_val = collect_deductions(
-                    console
-                )
+                num_dependents, pgbl, alimony_val = collect_deductions(console)
 
         # ── Goodbye ─────────────────────────────────────────────
         console.print()
@@ -1597,6 +1618,5 @@ def main() -> None:
         console.print()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
-
