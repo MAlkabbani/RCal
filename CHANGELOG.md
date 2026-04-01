@@ -4,6 +4,25 @@ All notable changes to the RCal project are documented here.
 
 ---
 
+## [3.2.2] — 2026-04-01
+
+### 📚 Final Docs Surface Trim
+
+Final cleanup pass to keep only runtime-relevant documentation in the public `docs/` directory.
+
+### Removed
+
+- **`docs/OSS_RELEASE_CHECKLIST.md`** — Moved to local archive to reduce public documentation noise after repository hardening tasks were completed.
+
+### Changed
+
+- **Public docs footprint** — Active `docs/` now focuses on:
+  - `AI_REFERENCE_DOC.md`
+  - `COMPLIANCE_AUDIT.md`
+  - `COMPLIANCE_ZERO_REVENUE.md`
+
+---
+
 ## [3.2.1] — 2026-04-01
 
 ### 🧹 Documentation Surface Cleanup
