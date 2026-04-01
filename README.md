@@ -1,95 +1,54 @@
-# 🧮 RCal — Brazilian Simples Nacional Tax Calculator
+# 🧮 RCal — Simples Nacional Planning CLI
 
-**RCal** is a standalone, interactive Python CLI tool that calculates the optimal **Pró-labore** (administrator salary), taxes, and dividends for a Brazilian tech company operating under the **Simples Nacional** tax regime (**Anexo III**), specifically for companies that export services.
+RCal is a standalone Python terminal calculator for Brazilian micro and small businesses under Simples Nacional, focused on founder-operated Ltda/SLU service exporters using Fator R planning.
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Platform](https://img.shields.io/badge/Platform-macOS%20M1%2FM2%2FM3-000000?logo=apple)
-![Rich](https://img.shields.io/badge/Rich-13.0+-00b4d8?logo=python&logoColor=white)
+It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-home under the repository's current assumptions.
 
----
+## What this tool is
 
-## 📖 What Is the "Fator R" Rule?
+- A planning calculator for monthly scenario analysis
+- A Rich-based CLI focused on fast what-if comparisons
+- A scoped model for Simples Nacional / Anexo III assumptions used in this repository
 
-The **Fator R** (Factor R) is a ratio defined by Brazilian tax legislation ([Lei Complementar 123/2006](http://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm)) that determines which **tax annex** (table of rates) applies to a service company under the Simples Nacional regime.
+## What this tool is not
 
-### The Formula
+- Not a PGDAS-D filing engine
+- Not a replacement for contador review
+- Not a full RBT12 simulation across all Simples annexes and municipal realities
 
-```
-Fator R = Payroll Expenses (last 12 months) / Gross Revenue (last 12 months)
-```
+## Who this is for
 
-### Why It Matters
+- Founder-operators and solo administrators of ME/EPP entities (Ltda/SLU)
+- Service-exporting companies planning Fator R and take-home outcomes
+- Users comfortable running terminal workflows
 
-| Condition | Tax Annex | Effective Starting Rate |
-|-----------|-----------|------------------------|
-| Fator R **≥ 28%** | **Anexo III** | ~6.0% |
-| Fator R **< 28%** | **Anexo V** | ~15.5% |
+## Scope assumptions encoded in code
 
-By ensuring the company's total payroll (primarily the administrator's **Pró-labore**) represents **at least 28% of gross revenue**, the company qualifies for the **significantly lower** Anexo III tax rates.
+- Simples Nacional planning focus with Anexo III assumptions
+- Fator R target fixed at 28%
+- Effective DAS rate fixed at 3.054% for Bracket 1 planning scenarios
+- Federal minimum wage floor for Pró-labore
+- IRPF 2026 table, deductions, and reducer logic
+- Advisory reminders for SC / Florianópolis zero-revenue compliance context
 
-> **💡 In practice:** For a small tech company with a single administrator, this means setting the Pró-labore to at least 28% of monthly revenue — but never below the federal minimum wage.
+See source constants in `main.py` and regulatory notes in `docs/`.
 
----
-
-## ✨ Features
-
-- 🧮 **Automatic Fator R optimization** — calculates the ideal Pró-labore
-- 💱 **USD → BRL conversion** — built for service exporters
-- 🏛️ **IRPF 2026 calculation aligned to Receita guidance** — progressive table, simplified monthly deduction, and Lei nº 15.270/2025 reducer
-- 📝 **Optional deductions** — dependents, PGBL pension, alimony (saved between sessions)
-- 🎨 **Premium terminal UI** — branded ASCII header, 3-zone layout, themed colors via [Rich](https://github.com/Textualize/rich)
-- 📊 **Visual revenue breakdown** — stacked bar chart showing salary/INSS/IRPF/DAS/dividends split
-- 🛡️ **Input validation** — rejects invalid dates, zero/negative numbers with clear error messages
-- 🔄 **Multi-scenario loop** — compare different months, revenues, or exchange rates without restarting
-- ⚠️ **Smart warnings** — Bracket 1 ceiling warning, negative dividends danger panel with SC/Florianópolis zero-revenue compliance tracking
-- 📦 **Dividend calculation** — shows tax-free dividend distribution
-- 🏠 **Net take-home** — total after all deductions (INSS + IRPF) with effective tax burden %
-
----
-
-## 🔢 Tax Constants (2026)
-
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `LEGAL_MINIMUM_WAGE` | R$ 1.621,00 | Federal minimum wage |
-| `DAS_TAX_RATE` | 3,054% | Simples Nacional (Anexo III, 1st bracket) |
-| `INSS_TAX_RATE` | 11% | Social security contribution |
-| `INSS_CEILING` | R$ 8.475,55 | INSS contribution ceiling (teto previdenciário) |
-| `FATOR_R_TARGET` | 28% | Minimum payroll-to-revenue ratio |
-| `IRPF_TABLE_2026` | 5 brackets | Progressive table: Isento / 7.5% / 15% / 22.5% / 27.5% |
-| `IRPF_DEPENDENT_DEDUCTION` | R$ 189,59 | Monthly IRPF deduction per dependent |
-| `IRPF_SIMPLIFIED_DEDUCTION` | R$ 607,20 | Optional monthly simplified deduction |
-| `IRPF_REDUCER_*` | Lei 15.270/2025 | Full exemption ≤ R$ 5k, phase-out to R$ 7.35k |
-
----
-
-## 🚀 Quick Start (macOS)
-
-### 1. Clone the Repository
+## Quick start
 
 ```bash
 git clone https://github.com/MAlkabbani/RCal.git
 cd RCal
-```
-
-### 2. Run (One Command)
-
-```bash
 ./rcal
 ```
 
-That's it! The `rcal` launcher automatically:
-- Finds your Python 3 installation
-- Creates a virtual environment (first run only)
-- Installs dependencies (first run only)
-- Launches the calculator
+The `./rcal` launcher automatically:
 
-> **💡 First run** takes ~5 seconds for setup. Subsequent runs launch instantly.
+- Finds Python 3
+- Creates `.venv` if missing
+- Installs runtime dependencies from `requirements.txt`
+- Runs `main.py`
 
-### Alternative: Manual Setup
-
-If you prefer to manage the environment yourself:
+## Manual setup
 
 ```bash
 python3 -m venv .venv
@@ -98,182 +57,92 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-### Run Tests
+## CLI usage flow
 
-```bash
-source .venv/bin/activate
-python3 -m unittest test_main -v
+At runtime, RCal prompts for:
+
+1. Current month/year (`MM/YYYY`)
+2. Monthly revenue in USD (zero is allowed and triggers advisory paths)
+3. USD→BRL exchange rate
+4. Optional IRPF deductions (dependents, PGBL, alimony)
+
+After each calculation:
+
+- `[1]` Change all inputs
+- `[2]` Change only revenue
+- `[3]` Change only exchange rate
+- `[4]` Clear saved memory (`~/.rcal_state.json`)
+
+## Realistic scenarios to validate
+
+- Standard exporter case (`883 USD`, `5.23` rate)
+- Higher revenue case with Bracket 1 warning (`5000 USD`, `5.75` rate)
+- Zero-revenue advisory path (`0 USD`)
+- Low-revenue negative dividends path
+
+## Calculation model summary
+
+1. Convert USD revenue to BRL
+2. Compute Fator R minimum (`28%`)
+3. Set ideal Pró-labore as `max(Fator R minimum, legal minimum wage)`
+4. Compute INSS (with ceiling), DAS estimate, IRPF taxable base
+5. Compute IRPF 2026 with deduction model and reducer
+6. Compute dividends and net take-home
+
+## Project layout
+
+```text
+RCal/
+├── rcal
+├── main.py
+├── test_main.py
+├── qa.sh
+├── benchmark.py
+├── backup_workspace.py
+├── requirements.txt
+├── pyproject.toml
+├── CHANGELOG.md
+└── docs/
+    ├── AI_REFERENCE_DOC.md
+    ├── COMPLIANCE_AUDIT.md
+    ├── COMPLIANCE_ZERO_REVENUE.md
+    ├── walkthrough.md
+    └── initial-prompt.md
 ```
 
-### Run Full QA
+## Development and QA
+
+Full local QA pipeline:
 
 ```bash
 source .venv/bin/activate
 bash qa.sh
 ```
 
-### Recoverable Workspace Safeguards
+`qa.sh` runs formatting, linting, typing, tests with coverage, and benchmark.
 
-- Project autosave is enforced through `.vscode/settings.json`
-- Debug launch profiles are restored in `.vscode/launch.json`
-- `bash qa.sh` now creates a timestamped workspace backup in `backups/`
-- You can create a manual backup at any time with `python3 backup_workspace.py`
+## Documentation map
 
----
+- `docs/AI_REFERENCE_DOC.md`: tax logic and invariants
+- `docs/COMPLIANCE_AUDIT.md`: compliance boundaries and review notes
+- `docs/COMPLIANCE_ZERO_REVENUE.md`: low/zero revenue legal advisory context
+- `docs/walkthrough.md`: implementation walkthrough and project evolution
 
-## 💻 Usage Example
+## Limitations
 
-When you run the tool, it will interactively prompt you for:
+- DAS is estimated with a fixed effective rate intended for planning
+- Official filing outcomes still depend on rolling revenue history and payroll history
+- Export exemption applicability is fact-dependent and must be verified professionally
+- Municipal obligations are surfaced as reminders, not fully computed tax modules
 
-1. **Current Month/Year** — defaults to the current month (e.g., `03/2026`)
-2. **Monthly Revenue in USD** — e.g., `5000`
-3. **USD → BRL Exchange Rate** — e.g., `5.75`
+## Disclaimer
 
-### Sample Output
+This tool provides planning estimates only. Always confirm filing decisions with a qualified Brazilian accountant (contador), especially for PGDAS-D, DAS, and municipal obligations.
 
-```
-  ██████╗   ██████╗  █████╗  ██╗
-  ██╔══██╗ ██╔════╝ ██╔══██╗ ██║
-  ██████╔╝ ██║      ███████║ ██║
-  ██╔══██╗ ██║      ██╔══██║ ██║
-  ██║  ██║ ╚██████╗ ██║  ██║ ███████╗
-  ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝
+## Contributing
 
-          Simples Nacional Tax Calculator
-    Anexo III  ·  Fator R  ·  Export Exemptions
+See `CONTRIBUTING.md` for contribution workflow and quality expectations.
 
-────────────────────────────────────────────────
+## License
 
-📅 Current Month/Year (MM/YYYY) (03/2026): 03/2026
-💵 Monthly Revenue in USD: 5000
-💱 USD → BRL Exchange Rate: 5.75
-
-📝 Apply IRPF deductions? (dependents, PGBL, alimony) [y/N]: n
-
-  ╭─── 📅 Month ───╮ ╭──── 💵 Revenue ────╮ ╭─── 💱 Rate ────╮
-  │    03/2026     │ │    US$ 5,000.00    │ │   R$ 5.7500    │
-  ╰────────────────╯ ╰────────────────────╯ ╰────────────────╯
-
-  ╭──────────────── 📊 Tax Breakdown ─────────────────╮
-  │ ┌──────────────────────┬──────────────────────────┐│
-  │ │ Gross Revenue (BRL)  │              R$ 28.750,00 ││
-  │ │ Fator R Min (28%)    │               R$ 8.050,00 ││
-  │ │ ✨ Ideal Pró-labore  │               R$ 8.050,00 ││
-  │ │ INSS (11%)           │              - R$ 885,50  ││
-  │ │ DAS (Simples)        │              - R$ 878,02  ││
-  │ │ IRPF Taxable Base    │               R$ 7.164,50 ││
-  │ │ IRPF Deduction Mode  │       Legal (R$ 885,50)   ││
-  │ │ IRPF (Lei 15.270)    │            - R$ 1.061,51  ││
-  │ │ 📈 Bracket Warning   │   ⚠️ Exceeds R$ 180k      ││
-  │ └──────────────────────┴──────────────────────────┘│
-  ╰────────────────────────────────────────────────────╯
-
-  ╭────────────── 💰 Your Bottom Line ──────────────╮
-  │  📦 Tax-Free Dividends         R$ 19.821,97     │
-  │  🏠 Net Take-Home              R$ 25.924,97     │
-  │  📉 Effective Tax Burden              9.8%      │
-  │                                                  │
-  │  Revenue Distribution                            │
-  │  ██████████████████████████████████████████████  │
-  │  █ Salary 21%  █ INSS 3%  █ IRPF 4%  █ DAS 3%  │
-  │  █ Yours 69%                                     │
-  ╰──────────────────────────────────────────────────╯
-
-🔄 Calculate another month? [y/n] (y):
-```
-*(Actual output includes full colors and theming)*
-
-### Loop Mode
-
-After each calculation, you can:
-
-- **[1] Change all inputs** — re-enter month, revenue, and rate (rate pre-filled)
-- **[2] Change only revenue** — keep current month and exchange rate
-- **[3] Change only exchange rate** — keep current month and revenue
-- **[4] Clear memory** — wipe saved state and start fresh
-
-This makes comparing multiple scenarios effortless.
-
-### 💾 Memory
-
-RCal **remembers your last inputs** between sessions. When you relaunch, your previous month, revenue, exchange rate, and IRPF deduction settings are pre-filled as defaults.
-
-- State is stored in `~/.rcal_state.json` (human-readable JSON)
-- Deduction values (dependents, PGBL, alimony) are also persisted
-- If you used deductions last time, the prompt defaults to "yes" on next launch
-- Use **[4] Clear memory** from the menu to wipe everything
-- Or manually delete: `rm ~/.rcal_state.json`
-
----
-
-## 📐 How the Math Works
-
-Given inputs: **Revenue (USD)** and **Exchange Rate (BRL)**:
-
-| Step | Calculation | Formula |
-|------|-------------|---------|
-| 1 | Gross Revenue | `Revenue_USD × Exchange_Rate` |
-| 2 | Fator R Minimum | `Gross_Revenue × 0.28` |
-| 3 | Ideal Pró-labore | `max(Fator_R_Min, 1621.00)` |
-| 4 | INSS Tax | `Pró-labore × 0.11` |
-| 5 | DAS Tax | `Gross_Revenue × 0.03054` |
-| 6 | IRPF Taxable Base | `Pró-labore − max(Legal_Deductions, 607.20)` |
-| 7 | IRPF Calculation | Progressive table + Lei 15.270/2025 reducer using gross taxable income as the reduction trigger |
-| 8 | Dividends | `Gross_Revenue − Pró-labore − DAS` |
-| 9 | Net Take-Home | `(Pró-labore − INSS − IRPF) + Dividends` |
-
----
-
-## 🏗️ Project Structure
-
-```text
-RCal/
-├── rcal                 # One-command launcher (bash)
-├── backup_workspace.py  # Timestamped workspace backup generator
-├── benchmark.py         # Performance benchmark for the calculation engine
-├── main.py              # Main application (UI + calculation engine)
-├── test_main.py         # Unit tests (149 tests, 20 test classes)
-├── pyproject.toml       # Black / pytest / mypy / pylint configuration
-├── qa.sh                # Full QA pipeline with benchmark step
-├── requirements.txt     # Python dependencies (rich>=13.0.0)
-├── README.md            # This file
-├── CHANGELOG.md         # Version history and changes
-├── .gitignore           # Git ignore rules
-└── docs/
-    ├── AI_REFERENCE_DOC.md    # AI agent tax logic reference
-    ├── COMPLIANCE_AUDIT.md    # Source-aligned audit notes and checklist
-    ├── COMPLIANCE_ZERO_REVENUE.md
-    ├── initial-prompt.md
-    └── walkthrough.md
-└── .vscode/
-    ├── launch.json           # Restored debug configurations
-    └── settings.json         # Workspace autosave and hot-exit settings
-```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! The codebase uses:
-
-- **Type hints** throughout for clarity
-- **Docstrings** explaining the Brazilian tax context
-- **Named constants** with explanatory comments
-- **Rich Theme** for consistent, customizable styling
-- **Custom Prompt subclasses** for input validation
-
-If you're unfamiliar with Brazilian tax law, the comments in `main.py` provide context for each calculation step.
-
----
-
-## ⚖️ Disclaimer
-
-This tool provides **estimates for planning purposes only**. Official PGDAS-D and DAS filings still depend on accumulated revenue over the past 12 months, payroll history, municipal licensing facts, and confirmation that export exemptions apply to the service being billed.
-
-**Always consult a qualified Brazilian accountant (contador) for official tax filings.**
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
+Licensed under MIT. See `LICENSE`.
