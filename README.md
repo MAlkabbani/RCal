@@ -1,28 +1,52 @@
 # 🧮 RCal — Simples Nacional Planning CLI
 
+```text
+  ██████╗   ██████╗  █████╗  ██╗
+  ██╔══██╗ ██╔════╝ ██╔══██╗ ██║
+  ██████╔╝ ██║      ███████║ ██║
+  ██╔══██╗ ██║      ██╔══██║ ██║
+  ██║  ██║ ╚██████╗ ██║  ██║ ███████╗
+  ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝
+```
+
 RCal is a standalone Python terminal calculator for Brazilian micro and small businesses under Simples Nacional, focused on founder-operated Ltda/SLU service exporters using Fator R planning.
 
 It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-home under the repository's current assumptions.
 
-## What this tool is
+## ⚡ Quick Attraction
+
+- 🚀 One command to run: `./rcal`
+- 🎯 Built for fast what-if comparisons across revenue and exchange-rate changes
+- 🧾 Clear breakdown of Pró-labore, INSS, IRPF, DAS, dividends, and net take-home
+- 💾 Remembers your last inputs for faster monthly planning
+
+## ✨ Key Features
+
+- 🧮 Fator R optimization for Anexo III planning assumptions
+- 💱 USD → BRL conversion tuned for service exporters
+- 🏛️ IRPF 2026 with deductions and legal reducer logic
+- ⚠️ Advisory flows for zero-revenue and low-viability months
+- 🎨 Rich-powered terminal output designed for readability
+
+## ✅ What this tool is
 
 - A planning calculator for monthly scenario analysis
 - A Rich-based CLI focused on fast what-if comparisons
 - A scoped model for Simples Nacional / Anexo III assumptions used in this repository
 
-## What this tool is not
+## 🚫 What this tool is not
 
 - Not a PGDAS-D filing engine
 - Not a replacement for contador review
 - Not a full RBT12 simulation across all Simples annexes and municipal realities
 
-## Who this is for
+## 👥 Who this is for
 
 - Founder-operators and solo administrators of ME/EPP entities (Ltda/SLU)
 - Service-exporting companies planning Fator R and take-home outcomes
 - Users comfortable running terminal workflows
 
-## Scope assumptions encoded in code
+## 📌 Scope assumptions encoded in code
 
 - Simples Nacional planning focus with Anexo III assumptions
 - Fator R target fixed at 28%
@@ -33,7 +57,7 @@ It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-
 
 See source constants in `main.py` and regulatory notes in `docs/`.
 
-## Quick start
+## 🚀 Quick start
 
 ```bash
 git clone https://github.com/MAlkabbani/RCal.git
@@ -48,7 +72,7 @@ The `./rcal` launcher automatically:
 - Installs runtime dependencies from `requirements.txt`
 - Runs `main.py`
 
-## Manual setup
+## 🛠️ Manual setup
 
 ```bash
 python3 -m venv .venv
@@ -57,7 +81,7 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-## CLI usage flow
+## 💻 CLI usage flow
 
 At runtime, RCal prompts for:
 
@@ -73,14 +97,14 @@ After each calculation:
 - `[3]` Change only exchange rate
 - `[4]` Clear saved memory (`~/.rcal_state.json`)
 
-## Realistic scenarios to validate
+## 🧪 Realistic scenarios to validate
 
 - Standard exporter case (`883 USD`, `5.23` rate)
 - Higher revenue case with Bracket 1 warning (`5000 USD`, `5.75` rate)
 - Zero-revenue advisory path (`0 USD`)
 - Low-revenue negative dividends path
 
-## Calculation model summary
+## 📐 Calculation model summary
 
 1. Convert USD revenue to BRL
 2. Compute Fator R minimum (`28%`)
@@ -89,7 +113,7 @@ After each calculation:
 5. Compute IRPF 2026 with deduction model and reducer
 6. Compute dividends and net take-home
 
-## Project layout
+## 🗂️ Project layout
 
 ```text
 RCal/
@@ -108,7 +132,7 @@ RCal/
     └── COMPLIANCE_ZERO_REVENUE.md
 ```
 
-## Development and QA
+## ✅ Development and QA
 
 Install development tooling:
 
@@ -126,27 +150,27 @@ bash qa.sh
 
 `qa.sh` runs formatting, linting, typing, tests with coverage, and benchmark.
 
-## Documentation map
+## 📚 Documentation map
 
 - `docs/AI_REFERENCE_DOC.md`: tax logic and invariants
 - `docs/COMPLIANCE_AUDIT.md`: compliance boundaries and review notes
 - `docs/COMPLIANCE_ZERO_REVENUE.md`: low/zero revenue legal advisory context
 
-## Limitations
+## ⚠️ Limitations
 
 - DAS is estimated with a fixed effective rate intended for planning
 - Official filing outcomes still depend on rolling revenue history and payroll history
 - Export exemption applicability is fact-dependent and must be verified professionally
 - Municipal obligations are surfaced as reminders, not fully computed tax modules
 
-## Disclaimer
+## ⚖️ Disclaimer
 
 This tool provides planning estimates only. Always confirm filing decisions with a qualified Brazilian accountant (contador), especially for PGDAS-D, DAS, and municipal obligations.
 
-## Contributing
+## 🤝 Contributing
 
 See `CONTRIBUTING.md` for contribution workflow and quality expectations.
 
-## License
+## 📄 License
 
 Licensed under MIT. See `LICENSE`.
