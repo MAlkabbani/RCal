@@ -112,6 +112,13 @@ RCal/
 
 ## Development and QA
 
+Install development tooling:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
 Full local QA pipeline:
 
 ```bash
@@ -126,6 +133,7 @@ bash qa.sh
 - `docs/AI_REFERENCE_DOC.md`: tax logic and invariants
 - `docs/COMPLIANCE_AUDIT.md`: compliance boundaries and review notes
 - `docs/COMPLIANCE_ZERO_REVENUE.md`: low/zero revenue legal advisory context
+- `docs/REPO_HOUSEKEEPING.md`: archive candidates and cleanup plan
 - `docs/walkthrough.md`: implementation walkthrough and project evolution
 
 ## Limitations
