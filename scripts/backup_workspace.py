@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 BACKUP_DIR = ROOT / "backups"
 EXCLUDED_PARTS = {
     ".git",
