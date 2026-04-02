@@ -1,5 +1,7 @@
 # 🧮 RCal — Simples Nacional Planning CLI
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/webeworx)
+
 ```text
   ██████╗   ██████╗  █████╗  ██╗
   ██╔══██╗ ██╔════╝ ██╔══██╗ ██║
@@ -175,6 +177,12 @@ This tool provides planning estimates only. Always confirm filing decisions with
 ## 🤝 Contributing
 
 See `CONTRIBUTING.md` for contribution workflow and quality expectations.
+
+## 💖 Support
+
+If you find RCal helpful for your business planning, consider supporting the project!
+
+<a href="https://buymeacoffee.com/webeworx" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 ## 📄 License
 
