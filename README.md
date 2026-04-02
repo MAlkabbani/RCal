@@ -55,7 +55,7 @@ It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-
 - IRPF 2026 table, deductions, and reducer logic
 - Advisory reminders for SC / Florianópolis zero-revenue compliance context
 
-See source constants in `main.py` and regulatory notes in `docs/`.
+See source constants in `src/rcal/main.py` and regulatory notes in `docs/`.
 
 ## 🚀 Quick start
 
