@@ -29,7 +29,6 @@ This audit reviews the recent IRPF, zero-revenue, and enterprise-QA updates in R
 ### Corrected in operational resilience
 
 - Workspace autosave and hot-exit behavior are now committed in `.vscode/settings.json`.
-- Python launch targets are now committed in `.vscode/launch.json` so the main app and test entry points are restorable after IDE interruption.
 - The repository now includes `backup_workspace.py`, and `qa.sh` creates a timestamped ZIP backup before verification begins.
 
 ### Corrected in documentation

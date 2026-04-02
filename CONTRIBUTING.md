@@ -7,7 +7,7 @@ Thank you for contributing to RCal.
 Contributions should stay aligned with the repository's current scope:
 
 - Python CLI
-- Simples Nacional planning assumptions represented in `main.py`
+- Simples Nacional planning assumptions represented in `src/rcal/main.py`
 - Founder/operator scenario support for service-exporting Ltda/SLU contexts
 
 ## Local setup
@@ -15,8 +15,8 @@ Contributions should stay aligned with the repository's current scope:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pip install black flake8 pylint mypy pytest pytest-cov pytest-benchmark
+pip install -e .
+pip install -r requirements-dev.txt
 ```
 
 ## Quality gate

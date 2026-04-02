@@ -113,7 +113,7 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 ### Entry Points
 
 - `./rcal` — Bash launcher (auto-venv, auto-install, auto-run)
-- `python3 main.py` — Direct execution (requires manual venv activation)
+- `rcal` — Installed console script after `pip install -e .`
 
 ### Dependencies
 

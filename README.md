@@ -132,7 +132,6 @@ RCal/
 │   ├── benchmark.py
 │   └── backup_workspace.py
 ├── qa.sh               # Full QA pipeline
-├── requirements.txt
 ├── requirements-dev.txt
 ├── pyproject.toml      # Modern packaging
 ├── CHANGELOG.md
@@ -145,6 +144,7 @@ Install development tooling:
 
 ```bash
 source .venv/bin/activate
+pip install -e .
 pip install -r requirements-dev.txt
 ```
 

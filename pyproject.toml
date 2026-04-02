@@ -8,14 +8,13 @@ version = "3.2.3"
 description = "Brazilian Simples Nacional Tax Calculator for tech service exporters"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "RCal Contributors"}
 ]
 keywords = ["brazil", "tax", "calculator", "simples-nacional", "fator-r"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Office/Business :: Financial :: Accounting",
 ]
