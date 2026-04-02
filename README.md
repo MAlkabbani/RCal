@@ -13,7 +13,7 @@ RCal is a standalone Python terminal calculator for Brazilian micro and small bu
 
 It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-home under the repository's current assumptions.
 
-
+![RCal Demo](./rcal-demo.gif)
 
 ## ⚡ Quick Attraction
 
