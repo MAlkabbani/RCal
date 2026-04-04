@@ -114,7 +114,7 @@ LOGO = """\
 
 AppLanguage = Literal["en", "pt-BR"]
 DEFAULT_UI_LANGUAGE: AppLanguage = "en"
-ACTIVE_UI_LANGUAGE: AppLanguage = DEFAULT_UI_LANGUAGE
+ACTIVE_UI_STATE: dict[str, AppLanguage] = {"language": DEFAULT_UI_LANGUAGE}
 
 UI_COPY: dict[AppLanguage, dict[str, str]] = {
     "en": {
@@ -420,13 +420,12 @@ def normalize_language(
 
 def set_active_language(language: AppLanguage) -> None:
     """Update the active UI language used by prompt validators."""
-    global ACTIVE_UI_LANGUAGE
-    ACTIVE_UI_LANGUAGE = normalize_language(language)
+    ACTIVE_UI_STATE["language"] = normalize_language(language)
 
 
 def get_active_language() -> AppLanguage:
     """Return the current UI language used by prompt validators."""
-    return ACTIVE_UI_LANGUAGE
+    return ACTIVE_UI_STATE["language"]
 
 
 def tr(language: AppLanguage, key: str, **kwargs: Any) -> str:
