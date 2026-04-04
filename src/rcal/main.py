@@ -407,7 +407,9 @@ UI_COPY: dict[AppLanguage, dict[str, str]] = {
 }
 
 
-def normalize_language(value: Any, default: AppLanguage = DEFAULT_UI_LANGUAGE) -> AppLanguage:
+def normalize_language(
+    value: Any, default: AppLanguage = DEFAULT_UI_LANGUAGE
+) -> AppLanguage:
     """Normalize persisted or user-entered language values."""
     if value in ("pt", "pt-BR"):
         return "pt-BR"
@@ -467,6 +469,7 @@ def prompt_language(
         default="pt" if normalize_language(default_language) == "pt-BR" else "en",
     )
     return normalize_language(answer)
+
 
 # ──────────────────────────────────────────────────────────────────
 # Tax Constants for 2026
@@ -716,7 +719,9 @@ class MonthYearPrompt(Prompt):
         """
         value = value.strip()
         if not re.match(r"^\d{2}/\d{4}$", value):
-            raise InvalidResponse(tr(get_active_language(), "errors.invalid_month_year"))
+            raise InvalidResponse(
+                tr(get_active_language(), "errors.invalid_month_year")
+            )
         month = int(value[:2])
         if not 1 <= month <= 12:
             raise InvalidResponse(tr(get_active_language(), "errors.invalid_month"))
@@ -776,7 +781,9 @@ class NonNegativeIntPrompt(Prompt):
         try:
             result = int(value)
         except ValueError as exc:
-            raise InvalidResponse(tr(get_active_language(), "errors.invalid_int")) from exc
+            raise InvalidResponse(
+                tr(get_active_language(), "errors.invalid_int")
+            ) from exc
         if result < 0:
             raise InvalidResponse(tr(get_active_language(), "errors.negative"))
         return result
@@ -1217,9 +1224,7 @@ def display_header(
     console.print()
     console.print(Align.center(Text(tr(language, "header.title"), style="heading")))
     console.print(
-        Align.center(
-            Text(tr(language, "header.subtitle"), style="label.dim")
-        )
+        Align.center(Text(tr(language, "header.subtitle"), style="label.dim"))
     )
     console.print()
     console.print(Rule(style="border.dim"))
@@ -1480,9 +1485,7 @@ def display_results(
     # Show INSS label with "capped" indicator when the ceiling is active
     inss_capped = results.ideal_pro_labore > INSS_CEILING
     inss_label = (
-        tr(language, "table.inss_capped")
-        if inss_capped
-        else tr(language, "table.inss")
+        tr(language, "table.inss_capped") if inss_capped else tr(language, "table.inss")
     )
     table.add_row(
         inss_label,
@@ -1657,23 +1660,17 @@ def display_footer(
         console: Rich console instance for output.
     """
     console.print(Rule(title=tr(language, "footer.strategy.title"), style="border.dim"))
-    console.print(
-        Text(tr(language, "footer.strategy.body"), style="label.dim")
-    )
+    console.print(Text(tr(language, "footer.strategy.body"), style="label.dim"))
     console.print()
 
     console.print(Rule(title=tr(language, "footer.rate.title"), style="border.dim"))
-    console.print(
-        Text(tr(language, "footer.rate.body"), style="label.dim")
-    )
+    console.print(Text(tr(language, "footer.rate.body"), style="label.dim"))
     console.print()
 
     console.print(
         Rule(title=tr(language, "footer.disclaimer.title"), style="border.dim")
     )
-    console.print(
-        Text(tr(language, "footer.disclaimer.body"), style="label.dim")
-    )
+    console.print(Text(tr(language, "footer.disclaimer.body"), style="label.dim"))
     console.print()
 
 
@@ -1780,9 +1777,7 @@ def main() -> None:
 
         # Show saved state indicator if available
         if saved_state:
-            console.print(
-                Text(tr(ui_language, "state.restored"), style="label.dim")
-            )
+            console.print(Text(tr(ui_language, "state.restored"), style="label.dim"))
             console.print()
 
         # ── First Run: Collect all inputs ───────────────────────
@@ -1930,9 +1925,13 @@ def main() -> None:
             elif action == "clear":
                 # Wipe saved state from disk
                 if clear_state():
-                    console.print(Text(tr(ui_language, "state.cleared"), style="status.ok"))
+                    console.print(
+                        Text(tr(ui_language, "state.cleared"), style="status.ok")
+                    )
                 else:
-                    console.print(Text(tr(ui_language, "state.empty"), style="label.dim"))
+                    console.print(
+                        Text(tr(ui_language, "state.empty"), style="label.dim")
+                    )
                 console.print()
                 # Re-enter all inputs from scratch (no defaults)
                 month_year, revenue_usd, exchange_rate = collect_inputs(
@@ -1946,7 +1945,9 @@ def main() -> None:
             elif action == "language":
                 ui_language = prompt_language(console, ui_language)
                 set_active_language(ui_language)
-                console.print(Text(tr(ui_language, "language.changed"), style="status.ok"))
+                console.print(
+                    Text(tr(ui_language, "language.changed"), style="status.ok")
+                )
                 display_header(console, ui_language)
 
         # ── Goodbye ─────────────────────────────────────────────
@@ -1957,7 +1958,9 @@ def main() -> None:
     except KeyboardInterrupt:
         console.print("\n")
         console.print(
-            Rule(title=tr(get_active_language(), "goodbye.interrupt"), style="border.dim")
+            Rule(
+                title=tr(get_active_language(), "goodbye.interrupt"), style="border.dim"
+            )
         )
         console.print()
 

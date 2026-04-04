@@ -1516,7 +1516,9 @@ class TestCLI(unittest.TestCase):
         self.assertFalse(clear_state())
 
     @patch("rcal.main.Console")
-    @patch("rcal.main.load_state", return_value={"month_year": "01/2026", "language": "en"})
+    @patch(
+        "rcal.main.load_state", return_value={"month_year": "01/2026", "language": "en"}
+    )
     @patch("rcal.main.collect_inputs", side_effect=KeyboardInterrupt)
     def test_main_keyboard_interrupt(self, mock_input, mock_load, mock_console) -> None:
         """Test graceful exit on Ctrl+C."""
