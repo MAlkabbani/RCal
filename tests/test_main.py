@@ -810,6 +810,12 @@ class TestBreakdownBar(unittest.TestCase):
         bar = render_breakdown_bar(results)
         self.assertNotIn("IRPF", bar.plain)
 
+    def test_pt_br_localizes_breakdown_labels(self) -> None:
+        """PT-BR should localize the user-visible breakdown labels."""
+        results = calculate_taxes(revenue_usd=883.00, exchange_rate=5.23)
+        bar = render_breakdown_bar(results, language="pt-BR")
+        self.assertIn("Seu valor", bar.plain)
+
     def test_negative_dividends_with_irpf_segment(self) -> None:
         """Artificial scenario: IRPF > 0 but dividends are negative.
         Covers main.py Line ~617 block.
@@ -874,6 +880,7 @@ class TestStatePersistence(unittest.TestCase):
         self.assertEqual(state["month_year"], "03/2026")
         self.assertAlmostEqual(float(state["revenue_usd"]), 883.0)
         self.assertAlmostEqual(float(state["exchange_rate"]), 5.23)
+        self.assertEqual(state["language"], "en")
 
     def test_load_missing_file(self) -> None:
         """Loading from a non-existent file should return empty dict."""
@@ -924,6 +931,12 @@ class TestStatePersistence(unittest.TestCase):
         self.assertEqual(state["num_dependents"], 2)
         self.assertAlmostEqual(float(state["pgbl_contribution"]), 500.0)
         self.assertAlmostEqual(float(state["alimony"]), 1000.0)
+
+    def test_language_persistence(self) -> None:
+        """UI language choice should survive a save → load cycle."""
+        save_state("03/2026", 883.0, 5.23, language="pt-BR")
+        state = load_state()
+        self.assertEqual(state["language"], "pt-BR")
 
     def test_backward_compatible_load(self) -> None:
         """v3.0: Old state files without deduction keys should load fine."""
@@ -1352,10 +1365,10 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(rev, 1500.0)
         self.assertEqual(rate, 5.1)
 
-    @patch("rcal.main.Confirm.ask", return_value=True)
+    @patch("rcal.main.Prompt.ask", return_value="y")
     @patch("rcal.main.NonNegativeIntPrompt.ask", return_value=1)
     @patch("rcal.main.NonNegativeFloatPrompt.ask", side_effect=[500.0, 100.0])
-    def test_collect_deductions_yes(self, mock_float, mock_int, mock_confirm) -> None:
+    def test_collect_deductions_yes(self, mock_float, mock_int, mock_prompt) -> None:
         """Test full deduction collection path."""
         from rcal.main import collect_deductions
         from unittest.mock import MagicMock
@@ -1366,8 +1379,8 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(pgbl, 500.0)
         self.assertEqual(ali, 100.0)
 
-    @patch("rcal.main.Confirm.ask", return_value=False)
-    def test_collect_deductions_no(self, mock_confirm) -> None:
+    @patch("rcal.main.Prompt.ask", return_value="n")
+    def test_collect_deductions_no(self, mock_prompt) -> None:
         """Test skipping deduction collection path."""
         from rcal.main import collect_deductions
         from unittest.mock import MagicMock
@@ -1407,8 +1420,8 @@ class TestCLI(unittest.TestCase):
         display_footer(mock_console)
         self.assertTrue(mock_console.print.called)
 
-    @patch("rcal.main.Confirm.ask", return_value=False)
-    def test_prompt_next_action_no(self, mock_confirm) -> None:
+    @patch("rcal.main.Prompt.ask", return_value="n")
+    def test_prompt_next_action_no(self, mock_prompt) -> None:
         """Test user rejecting continuation loop returns None."""
         from rcal.main import prompt_next_action
         from unittest.mock import MagicMock
@@ -1416,10 +1429,12 @@ class TestCLI(unittest.TestCase):
         console = MagicMock()
         self.assertIsNone(prompt_next_action(console))
 
-    @patch("rcal.main.Confirm.ask", return_value=True)
-    @patch("rcal.main.Prompt.ask", side_effect=["1", "2", "3", "4"])
-    def test_prompt_next_action_choices(self, mock_prompt, mock_confirm) -> None:
-        """Test all 4 loop choice routes return correct keys."""
+    @patch(
+        "rcal.main.Prompt.ask",
+        side_effect=["y", "1", "y", "2", "y", "3", "y", "4", "y", "5"],
+    )
+    def test_prompt_next_action_choices(self, mock_prompt) -> None:
+        """Test all 5 loop choice routes return correct keys."""
         from rcal.main import prompt_next_action
         from unittest.mock import MagicMock
 
@@ -1428,9 +1443,20 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(prompt_next_action(console), "revenue")
         self.assertEqual(prompt_next_action(console), "rate")
         self.assertEqual(prompt_next_action(console), "clear")
+        self.assertEqual(prompt_next_action(console), "language")
+
+    @patch("rcal.main.Prompt.ask", return_value="pt")
+    def test_prompt_language(self, mock_prompt) -> None:
+        """PT selection should normalize to the pt-BR locale key."""
+        from rcal.main import prompt_language
+        from unittest.mock import MagicMock
+
+        console = MagicMock()
+        self.assertEqual(prompt_language(console), "pt-BR")
 
     @patch("rcal.main.NonNegativeFloatPrompt.ask", return_value=800.0)
     @patch("rcal.main.PositiveFloatPrompt.ask", return_value=6.0)
+    @patch("rcal.main.load_state", return_value={"language": "en"})
     @patch("rcal.main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
     @patch("rcal.main.collect_deductions", return_value=(0, 0.0, 0.0))
     @patch(
@@ -1448,6 +1474,7 @@ class TestCLI(unittest.TestCase):
         mock_action,
         mock_deduct,
         mock_input,
+        mock_load_state,
         mock_pos_rate_prompt,
         mock_nn_rev_prompt,
     ) -> None:
@@ -1460,6 +1487,7 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(mock_results.call_count, 5)
 
     @patch("rcal.main.clear_state", return_value=False)
+    @patch("rcal.main.load_state", return_value={"language": "en"})
     @patch("rcal.main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
     @patch("rcal.main.collect_deductions", return_value=(0, 0.0, 0.0))
     @patch("rcal.main.prompt_next_action", side_effect=["clear", None])
@@ -1488,7 +1516,7 @@ class TestCLI(unittest.TestCase):
         self.assertFalse(clear_state())
 
     @patch("rcal.main.Console")
-    @patch("rcal.main.load_state", return_value={"month_year": "01/2026"})
+    @patch("rcal.main.load_state", return_value={"month_year": "01/2026", "language": "en"})
     @patch("rcal.main.collect_inputs", side_effect=KeyboardInterrupt)
     def test_main_keyboard_interrupt(self, mock_input, mock_load, mock_console) -> None:
         """Test graceful exit on Ctrl+C."""
@@ -1496,6 +1524,70 @@ class TestCLI(unittest.TestCase):
 
         rcal_main()
         self.assertTrue(mock_console().print.called)
+
+    @patch("rcal.main.prompt_language", return_value="pt-BR")
+    @patch("rcal.main.load_state", return_value={"language": "en"})
+    @patch("rcal.main.collect_inputs", return_value=("03/2026", 1000.0, 5.0))
+    @patch("rcal.main.collect_deductions", return_value=(0, 0.0, 0.0))
+    @patch("rcal.main.prompt_next_action", side_effect=["language", None])
+    @patch("rcal.main.display_results")
+    @patch("rcal.main.display_header")
+    @patch("rcal.main.time.sleep")
+    def test_main_language_switch(
+        self,
+        mock_sleep,
+        mock_header,
+        mock_results,
+        mock_action,
+        mock_deduct,
+        mock_input,
+        mock_load,
+        mock_prompt_language,
+    ) -> None:
+        """Changing the UI language should redraw the header."""
+        from rcal.main import main as rcal_main
+
+        rcal_main()
+        self.assertEqual(mock_prompt_language.call_count, 1)
+        self.assertGreaterEqual(mock_header.call_count, 2)
+
+    @patch("rcal.main.Console")
+    @patch("rcal.main.prompt_language", return_value="en")
+    @patch("rcal.main.load_state", return_value={})
+    @patch("rcal.main.collect_inputs", side_effect=KeyboardInterrupt)
+    def test_main_prompts_for_language_when_missing(
+        self,
+        mock_input,
+        mock_load,
+        mock_prompt_language,
+        mock_console,
+    ) -> None:
+        """Missing persisted language should trigger the first-run language prompt."""
+        from rcal.main import main as rcal_main
+
+        rcal_main()
+        self.assertEqual(mock_prompt_language.call_count, 1)
+
+
+class TestLocalization(unittest.TestCase):
+    """Test localized UI-facing tax copy."""
+
+    def test_calculate_taxes_pt_br_status_strings(self) -> None:
+        """PT-BR should localize visible result labels returned by the engine."""
+        results = calculate_taxes(883.00, 5.23, language="pt-BR")
+        self.assertEqual(results.irpf_status, "✅ Isento")
+        self.assertEqual(results.irpf_deduction_model, "Simplificada")
+
+    def test_calculate_taxes_pt_br_bracket_warning(self) -> None:
+        """PT-BR should localize the bracket warning text."""
+        results = calculate_taxes(10000.0, 5.0, language="pt-BR")
+        self.assertIn("receita anual estimada", results.bracket_warning)
+
+    def test_normalize_language_unknown_uses_default(self) -> None:
+        """Unknown language values should fall back to the requested default."""
+        from rcal.main import normalize_language
+
+        self.assertEqual(normalize_language("es", default="pt-BR"), "pt-BR")
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ It helps estimate monthly Pró-labore, INSS, IRPF, DAS, dividends, and net take-
 - 🏛️ IRPF 2026 with deductions and legal reducer logic
 - ⚠️ Advisory flows for zero-revenue and low-viability months
 - 🎨 Rich-powered terminal output designed for readability
+- 🌐 Optional UI language selection: English by default, Portuguese (Brazil) on demand
 
 ## ✅ What this tool is
 
@@ -90,10 +91,11 @@ rcal
 
 At runtime, RCal prompts for:
 
-1. Current month/year (`MM/YYYY`)
-2. Monthly revenue in USD (zero is allowed and triggers advisory paths)
-3. USD→BRL exchange rate
-4. Optional IRPF deductions (dependents, PGBL, alimony)
+1. UI language (`en` or `pt`) on first launch, then remembers your choice
+2. Current month/year (`MM/YYYY`)
+3. Monthly revenue in USD (zero is allowed and triggers advisory paths)
+4. USD→BRL exchange rate
+5. Optional IRPF deductions (dependents, PGBL, alimony)
 
 After each calculation:
 
@@ -101,6 +103,7 @@ After each calculation:
 - `[2]` Change only revenue
 - `[3]` Change only exchange rate
 - `[4]` Clear saved memory (`~/.rcal_state.json`)
+- `[5]` Change the UI language without restarting the CLI
 
 ## 🧪 Realistic scenarios to validate
 

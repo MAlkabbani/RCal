@@ -80,8 +80,11 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 - The return object preserves all original financial outputs and now exposes `irpf_deduction_model`, `irpf_deduction_total`, and `irpf_reduction_basis` for auditability.
 - 149 unit tests across 20 test classes validate the mathematical engine.
 - All visual styling uses semantic tokens from `RCAL_THEME`. Do not use inline color strings.
+- End-user UI copy is localized through the in-file translation catalog and must remain switchable between English and Portuguese (Brazil).
 - Input validation is handled by `MonthYearPrompt`, `PositiveFloatPrompt`, `NonNegativeIntPrompt`, and `NonNegativeFloatPrompt` subclasses. Float prompts reject `NaN` and `Infinity` via `math.isfinite()` guards.
+- Prompt validation errors use the active UI language set at runtime; new prompt validators must follow the same pattern.
 - State persistence functions (`load_state`, `save_state`, `clear_state`) must never raise exceptions — they are convenience features that fail silently.
+- Saved state includes the selected UI language so future sessions restore the same interface language by default.
 
 ### Calculation Functions
 
@@ -94,20 +97,21 @@ _AI Agents: When modifying the codebase, respect these architectural constraints
 
 | Function | Purpose |
 |----------|---------|
+| `prompt_language()` | Lets the user choose `en` or `pt` and normalizes the saved locale |
 | `display_header()` | ASCII logo + subtitle + rule separator |
 | `collect_inputs()` | Validated prompts with 4-tier defaults: in-session → JSON → clock → none |
 | `collect_deductions()` | Optional IRPF deduction prompts with smart defaults from saved state |
 | `display_results()` | 3-zone output: input recap → tax breakdown → bottom line |
 | `display_footer()` | Rule-separated legal context sections |
 | `render_breakdown_bar()` | Proportional stacked bar chart (Unicode █) with IRPF segment |
-| `prompt_next_action()` | Loop mode menu (all/revenue/rate/clear) |
+| `prompt_next_action()` | Loop mode menu (all/revenue/rate/clear/language) |
 
 ### State Persistence
 
 | Function | Purpose |
 |----------|---------|
 | `load_state()` | Reads `~/.rcal_state.json`, returns dict or empty dict on error. Backward compatible with pre-v3.0 files. |
-| `save_state()` | Writes month/revenue/rate + deduction values to JSON file, silently ignores failures |
+| `save_state()` | Writes month/revenue/rate + deduction values + UI language to JSON, silently ignores failures |
 | `clear_state()` | Deletes the state file, returns True/False |
 
 ### Entry Points

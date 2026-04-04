@@ -44,7 +44,7 @@ import math
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -53,7 +53,7 @@ from rich.align import Align
 from rich.columns import Columns
 from rich.console import Console, Group
 from rich.panel import Panel
-from rich.prompt import Confirm, FloatPrompt, InvalidResponse, Prompt
+from rich.prompt import FloatPrompt, InvalidResponse, Prompt
 from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
@@ -111,6 +111,362 @@ LOGO = """\
   ██╔══██╗ ██║      ██╔══██║ ██║
   ██║  ██║ ╚██████╗ ██║  ██║ ███████╗
   ╚═╝  ╚═╝  ╚═════╝ ╚═╝  ╚═╝ ╚══════╝"""
+
+AppLanguage = Literal["en", "pt-BR"]
+DEFAULT_UI_LANGUAGE: AppLanguage = "en"
+ACTIVE_UI_LANGUAGE: AppLanguage = DEFAULT_UI_LANGUAGE
+
+UI_COPY: dict[AppLanguage, dict[str, str]] = {
+    "en": {
+        "language.prompt": "🌐 UI language / Idioma da interface",
+        "language.choices": "[prompt.hint](en = English, pt = Portugues do Brasil)[/]",
+        "language.changed": "  🌐 UI language updated to English.",
+        "errors.invalid_month_year": (
+            "[status.danger]  ✗ Please enter a valid month/year "
+            "(format: MM/YYYY, e.g. 03/2026).[/]"
+        ),
+        "errors.invalid_month": "[status.danger]  ✗ Month must be between 01 and 12.[/]",
+        "errors.invalid_number": "[status.danger]  ✗ Please enter a valid number.[/]",
+        "errors.invalid_positive": (
+            "[status.danger]  ✗ Value must be a finite number greater than zero.[/]"
+        ),
+        "errors.invalid_int": (
+            "[status.danger]  ✗ Please enter a whole number (0 or above).[/]"
+        ),
+        "errors.negative": "[status.danger]  ✗ Value cannot be negative.[/]",
+        "errors.invalid_non_negative": (
+            "[status.danger]  ✗ Value must be a finite, non-negative number.[/]"
+        ),
+        "common.yes": "y",
+        "common.no": "n",
+        "header.title": "Simples Nacional Tax Calculator",
+        "header.subtitle": "Anexo III  ·  Fator R  ·  Export Exemptions",
+        "state.restored": (
+            "  💾 Previous session restored — your last values are pre-filled as defaults."
+        ),
+        "input.month_year": "[prompt.label]📅 Current Month/Year[/] [prompt.hint](MM/YYYY)[/]",
+        "input.revenue": (
+            "[prompt.label]💵 Monthly Revenue in USD[/] "
+            "[prompt.hint](0 = zero-revenue advisory)[/]"
+        ),
+        "input.rate": "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+        "input.apply_deductions": (
+            "[prompt.label]📝 Apply IRPF deductions?[/] "
+            "[prompt.hint](dependents, PGBL, alimony)[/]"
+        ),
+        "input.dependents": "[prompt.label]👨‍👩‍👧 Number of Dependents[/]",
+        "input.dependents_hint": "[prompt.hint](R$ {amount:,.2f}/each)[/]",
+        "input.pgbl": "[prompt.label]🏦 PGBL Contribution (BRL)[/]",
+        "input.pgbl_hint": "[prompt.hint](capped at 12% of Pro-labore)[/]",
+        "input.alimony": "[prompt.label]⚖️  Alimony (BRL)[/]",
+        "spinner.calculating": "[brand]  Calculating...[/]",
+        "irpf.tax_free": "✅ Tax Free",
+        "irpf.status": "⚠️  IRPF: {amount}",
+        "irpf.mode.simplified": "Simplified",
+        "irpf.mode.legal": "Legal",
+        "warning.bracket": (
+            "⚠️  Estimated annual revenue ({annual}) exceeds Bracket 1 ceiling "
+            "({ceiling}). The effective DAS rate may be higher - consult your accountant."
+        ),
+        "bar.none": "  (No revenue to display)",
+        "bar.salary": "Salary",
+        "bar.yours": "Yours",
+        "bar.costs": " of costs",
+        "cards.month": "📅 Month",
+        "cards.revenue": "💵 Revenue",
+        "cards.rate": "💱 Rate",
+        "table.item": "📋 Item",
+        "table.value": "💰 Value",
+        "table.gross": "Gross Revenue (BRL)",
+        "table.fator_r": "Fator R Minimum (28%)",
+        "table.pro_labore": "✨ Ideal Pro-labore",
+        "table.inss": "INSS (11%)",
+        "table.inss_capped": "INSS (11%, capped)",
+        "table.das": "DAS (Simples Nacional)",
+        "table.taxable_base": "IRPF Taxable Base",
+        "table.deduction_mode": "IRPF Deduction Mode",
+        "table.irpf": "IRPF (Lei 15.270/2025)",
+        "table.irpf_status": "IRPF Status",
+        "table.bracket_warning": "📈 Bracket Warning",
+        "panel.breakdown": "📊 Tax Breakdown",
+        "bottom.dividends": "📦 Tax-Free Dividends",
+        "bottom.net": "🏠 Net Take-Home",
+        "bottom.burden": "📉 Effective Tax Burden",
+        "bottom.revenue_distribution": "  Revenue Distribution",
+        "panel.bottom_line": "💰 Your Bottom Line",
+        "panel.action_required": "⚠️  Action Required",
+        "warning.low_revenue": (
+            "⚠️  Revenue Too Low\n\n"
+            " Your monthly revenue ({gross}) is not enough to cover the\n"
+            " minimum Pro-labore ({pro_labore}) + DAS tax ({das}).\n\n"
+            " Dividends are negative: {dividends}\n"
+            " This means the company would need to inject capital to cover expenses.\n\n"
+            " ━━━ What you can do ━━━\n\n"
+            "   ① Increase revenue - Raise your monthly billing above {target}\n"
+            "     to generate positive dividends.\n\n"
+            "   ② Accept minimum wage salary - At this revenue level the\n"
+            "     Pro-labore is already at the legal minimum ({minimum_wage}).\n"
+            "     The company must still cover DAS + INSS from available funds.\n\n"
+            "━━━ SC / Florianopolis Reminders ━━━\n\n"
+            "  📌 PGDAS-D filing - Required every month, even with\n"
+            "     low revenue. Declare the actual amount.\n\n"
+            "  📌 TFF (municipal fee) - Florianopolis charges a fixed\n"
+            "     annual licensing fee regardless of revenue."
+        ),
+        "warning.zero_revenue": (
+            "⚠️  Zero Revenue Advisory\n\n"
+            "Your company generated no revenue this month.\n\n"
+            "━━━ Brazilian Legal Guidelines ━━━\n\n"
+            "  📌 Pro-labore is Optional - If the company is genuinely\n"
+            "     inactive, you do not have to withdraw Pro-labore.\n"
+            "     (This means no INSS cost, but no coverage either).\n\n"
+            "  📌 DAS is Zero - Your Simples Nacional tax is legally R$ 0,00.\n\n"
+            "  📌 PGDAS-D Filing - You MUST still file your monthly\n"
+            "     declaration informing zero revenue to avoid fines.\n\n"
+            "  📌 TFF (Florianopolis) - Annual municipal licensing fee\n"
+            "     must still be paid regardless of revenue.\n"
+        ),
+        "footer.strategy.title": "💡 Strategy",
+        "footer.strategy.body": (
+            "  Paying >=28% of gross as salary keeps you in Anexo III (~6%) "
+            "instead of Anexo V (~15.5%).\n"
+            "  The ideal Pro-labore is the minimum needed to maintain this "
+            "threshold while respecting the legal minimum wage."
+        ),
+        "footer.rate.title": "💱 Exchange Rate",
+        "footer.rate.body": (
+            "  Use the BRL rate on the date the funds are made available or "
+            "the invoice is issued - not the withdrawal date."
+        ),
+        "footer.disclaimer.title": "⚖️  Disclaimer",
+        "footer.disclaimer.body": (
+            "  Estimates for planning purposes only. PGDAS-D and DAS filings still "
+            "depend on rolling 12-month revenue, payroll history, and municipal "
+            "licensing facts. Always consult a qualified Brazilian accountant "
+            "(contador) for official filings."
+        ),
+        "loop.continue": "[prompt.label]🔄 Calculate another month?[/]",
+        "loop.title": "  What would you like to change?",
+        "loop.all": "  [1]  All inputs (month, revenue, rate)",
+        "loop.revenue": "  [2]  Only revenue (keep current rate)",
+        "loop.rate": "  [3]  Only exchange rate (keep current revenue)",
+        "loop.clear": "  [4]  🗑️  Clear memory (wipe saved state)",
+        "loop.language": "  [5]  🌐 Change UI language",
+        "loop.choice": "[prompt.label]  Your choice[/]",
+        "loop.keep_rate": "  Keeping: 📅 {month_year}  ·  💱 R$ {rate:,.4f}",
+        "loop.keep_revenue": "  Keeping: 📅 {month_year}  ·  💵 US$ {revenue:,.2f}",
+        "state.cleared": "  🗑️  Memory cleared! Saved state wiped.",
+        "state.empty": "  ℹ️  No saved state to clear.",
+        "goodbye.normal": "👋 Thanks!",
+        "goodbye.interrupt": "👋 See you soon!",
+    },
+    "pt-BR": {
+        "language.prompt": "🌐 Idioma da interface / UI language",
+        "language.choices": "[prompt.hint](en = English, pt = Portugues do Brasil)[/]",
+        "language.changed": "  🌐 Idioma da interface alterado para Portugues do Brasil.",
+        "errors.invalid_month_year": (
+            "[status.danger]  ✗ Digite um mes/ano valido "
+            "(formato: MM/AAAA, por exemplo 03/2026).[/]"
+        ),
+        "errors.invalid_month": "[status.danger]  ✗ O mes deve estar entre 01 e 12.[/]",
+        "errors.invalid_number": "[status.danger]  ✗ Digite um numero valido.[/]",
+        "errors.invalid_positive": (
+            "[status.danger]  ✗ O valor deve ser um numero finito maior que zero.[/]"
+        ),
+        "errors.invalid_int": (
+            "[status.danger]  ✗ Digite um numero inteiro (0 ou maior).[/]"
+        ),
+        "errors.negative": "[status.danger]  ✗ O valor nao pode ser negativo.[/]",
+        "errors.invalid_non_negative": (
+            "[status.danger]  ✗ O valor deve ser um numero finito nao negativo.[/]"
+        ),
+        "common.yes": "s",
+        "common.no": "n",
+        "header.title": "Calculadora de Impostos do Simples Nacional",
+        "header.subtitle": "Anexo III  ·  Fator R  ·  Isencoes na Exportacao",
+        "state.restored": (
+            "  💾 Sessao anterior restaurada — seus ultimos valores foram "
+            "preenchidos como padrao."
+        ),
+        "input.month_year": "[prompt.label]📅 Mes/Ano Atual[/] [prompt.hint](MM/AAAA)[/]",
+        "input.revenue": (
+            "[prompt.label]💵 Receita Mensal em USD[/] "
+            "[prompt.hint](0 = aviso de receita zero)[/]"
+        ),
+        "input.rate": "[prompt.label]💱 Cotacao USD → BRL[/]",
+        "input.apply_deductions": (
+            "[prompt.label]📝 Aplicar deducoes de IRPF?[/] "
+            "[prompt.hint](dependentes, PGBL, pensao alimenticia)[/]"
+        ),
+        "input.dependents": "[prompt.label]👨‍👩‍👧 Numero de Dependentes[/]",
+        "input.dependents_hint": "[prompt.hint](R$ {amount:,.2f}/cada)[/]",
+        "input.pgbl": "[prompt.label]🏦 Contribuicao para PGBL (BRL)[/]",
+        "input.pgbl_hint": "[prompt.hint](limitada a 12% do Pro-labore)[/]",
+        "input.alimony": "[prompt.label]⚖️  Pensao Alimenticia (BRL)[/]",
+        "spinner.calculating": "[brand]  Calculando...[/]",
+        "irpf.tax_free": "✅ Isento",
+        "irpf.status": "⚠️  IRPF: {amount}",
+        "irpf.mode.simplified": "Simplificada",
+        "irpf.mode.legal": "Legal",
+        "warning.bracket": (
+            "⚠️  A receita anual estimada ({annual}) excede o teto da Faixa 1 "
+            "({ceiling}). A aliquota efetiva do DAS pode ser maior - consulte seu contador."
+        ),
+        "bar.none": "  (Nao ha receita para exibir)",
+        "bar.salary": "Salario",
+        "bar.yours": "Seu valor",
+        "bar.costs": " dos custos",
+        "cards.month": "📅 Mes",
+        "cards.revenue": "💵 Receita",
+        "cards.rate": "💱 Cotacao",
+        "table.item": "📋 Item",
+        "table.value": "💰 Valor",
+        "table.gross": "Receita Bruta (BRL)",
+        "table.fator_r": "Minimo do Fator R (28%)",
+        "table.pro_labore": "✨ Pro-labore Ideal",
+        "table.inss": "INSS (11%)",
+        "table.inss_capped": "INSS (11%, teto aplicado)",
+        "table.das": "DAS (Simples Nacional)",
+        "table.taxable_base": "Base Tributavel do IRPF",
+        "table.deduction_mode": "Modelo de Deducao do IRPF",
+        "table.irpf": "IRPF (Lei 15.270/2025)",
+        "table.irpf_status": "Status do IRPF",
+        "table.bracket_warning": "📈 Aviso de Faixa",
+        "panel.breakdown": "📊 Detalhamento dos Impostos",
+        "bottom.dividends": "📦 Dividendos Isentos",
+        "bottom.net": "🏠 Liquido Final",
+        "bottom.burden": "📉 Carga Tributaria Efetiva",
+        "bottom.revenue_distribution": "  Distribuicao da Receita",
+        "panel.bottom_line": "💰 Seu Resultado Final",
+        "panel.action_required": "⚠️  Acao Necessaria",
+        "warning.low_revenue": (
+            "⚠️  Receita Muito Baixa\n\n"
+            " Sua receita mensal ({gross}) nao e suficiente para cobrir o\n"
+            " Pro-labore minimo ({pro_labore}) + DAS ({das}).\n\n"
+            " Os dividendos ficaram negativos: {dividends}\n"
+            " Isso significa que a empresa precisaria aportar capital para cobrir as despesas.\n\n"
+            " ━━━ O que voce pode fazer ━━━\n\n"
+            "   ① Aumentar a receita - Eleve seu faturamento mensal acima de {target}\n"
+            "     para gerar dividendos positivos.\n\n"
+            "   ② Aceitar salario minimo - Neste nivel de receita o\n"
+            "     Pro-labore ja esta no minimo legal ({minimum_wage}).\n"
+            "     A empresa ainda precisa cobrir DAS + INSS com os recursos disponiveis.\n\n"
+            "━━━ Lembretes de SC / Florianopolis ━━━\n\n"
+            "  📌 Envio do PGDAS-D - Obrigatorio todos os meses, mesmo com\n"
+            "     receita baixa. Informe o valor real.\n\n"
+            "  📌 TFF (taxa municipal) - Florianopolis cobra uma taxa anual fixa\n"
+            "     independentemente da receita."
+        ),
+        "warning.zero_revenue": (
+            "⚠️  Aviso de Receita Zero\n\n"
+            "Sua empresa nao gerou receita neste mes.\n\n"
+            "━━━ Diretrizes Legais Brasileiras ━━━\n\n"
+            "  📌 Pro-labore e Opcional - Se a empresa estiver realmente\n"
+            "     inativa, voce nao precisa retirar Pro-labore.\n"
+            "     (Isso significa sem custo de INSS, mas tambem sem cobertura).\n\n"
+            "  📌 DAS Zerado - Seu imposto do Simples Nacional e legalmente R$ 0,00.\n\n"
+            "  📌 Envio do PGDAS-D - Voce DEVE continuar enviando a declaracao mensal\n"
+            "     informando receita zero para evitar multas.\n\n"
+            "  📌 TFF (Florianopolis) - A taxa municipal anual de licenciamento\n"
+            "     continua devida independentemente da receita.\n"
+        ),
+        "footer.strategy.title": "💡 Estrategia",
+        "footer.strategy.body": (
+            "  Pagar >=28% da receita bruta como salario mantem voce no Anexo III (~6%) "
+            "em vez do Anexo V (~15,5%).\n"
+            "  O Pro-labore ideal e o minimo necessario para manter esse limite "
+            "respeitando o salario minimo legal."
+        ),
+        "footer.rate.title": "💱 Cotacao",
+        "footer.rate.body": (
+            "  Use a cotacao em BRL da data em que os recursos ficaram disponiveis "
+            "ou da emissao da nota - nao a data do saque."
+        ),
+        "footer.disclaimer.title": "⚖️  Aviso Legal",
+        "footer.disclaimer.body": (
+            "  Estimativas apenas para planejamento. O PGDAS-D e o DAS ainda "
+            "dependem da receita acumulada em 12 meses, do historico de folha e "
+            "de fatos municipais de licenciamento. Sempre consulte um contador "
+            "brasileiro qualificado para apuracoes oficiais."
+        ),
+        "loop.continue": "[prompt.label]🔄 Calcular outro mes?[/]",
+        "loop.title": "  O que voce gostaria de alterar?",
+        "loop.all": "  [1]  Todos os dados (mes, receita, cotacao)",
+        "loop.revenue": "  [2]  Apenas a receita (manter cotacao atual)",
+        "loop.rate": "  [3]  Apenas a cotacao (manter receita atual)",
+        "loop.clear": "  [4]  🗑️  Limpar memoria (apagar estado salvo)",
+        "loop.language": "  [5]  🌐 Alterar idioma da interface",
+        "loop.choice": "[prompt.label]  Sua escolha[/]",
+        "loop.keep_rate": "  Mantendo: 📅 {month_year}  ·  💱 R$ {rate:,.4f}",
+        "loop.keep_revenue": "  Mantendo: 📅 {month_year}  ·  💵 US$ {revenue:,.2f}",
+        "state.cleared": "  🗑️  Memoria limpa! O estado salvo foi apagado.",
+        "state.empty": "  ℹ️  Nao ha estado salvo para limpar.",
+        "goodbye.normal": "👋 Obrigado!",
+        "goodbye.interrupt": "👋 Ate logo!",
+    },
+}
+
+
+def normalize_language(value: Any, default: AppLanguage = DEFAULT_UI_LANGUAGE) -> AppLanguage:
+    """Normalize persisted or user-entered language values."""
+    if value in ("pt", "pt-BR"):
+        return "pt-BR"
+    if value == "en":
+        return "en"
+    return default
+
+
+def set_active_language(language: AppLanguage) -> None:
+    """Update the active UI language used by prompt validators."""
+    global ACTIVE_UI_LANGUAGE
+    ACTIVE_UI_LANGUAGE = normalize_language(language)
+
+
+def get_active_language() -> AppLanguage:
+    """Return the current UI language used by prompt validators."""
+    return ACTIVE_UI_LANGUAGE
+
+
+def tr(language: AppLanguage, key: str, **kwargs: Any) -> str:
+    """Fetch translated UI copy for the requested language."""
+    normalized = normalize_language(language)
+    template = UI_COPY[normalized][key]
+    return template.format(**kwargs) if kwargs else template
+
+
+def ask_yes_no(
+    console: Console,
+    language: AppLanguage,
+    prompt: str,
+    *,
+    default: bool,
+) -> bool:
+    """Ask a localized yes/no question using explicit language choices."""
+    yes_choice = tr(language, "common.yes")
+    no_choice = tr(language, "common.no")
+    default_choice = yes_choice if default else no_choice
+    answer = Prompt.ask(
+        f"{prompt} [prompt.hint]({yes_choice.upper()}/{no_choice.upper()})[/]",
+        console=console,
+        choices=[yes_choice, no_choice],
+        default=default_choice,
+    )
+    return answer == yes_choice
+
+
+def prompt_language(
+    console: Console,
+    default_language: AppLanguage = DEFAULT_UI_LANGUAGE,
+) -> AppLanguage:
+    """Allow the user to choose the UI language."""
+    answer = Prompt.ask(
+        f"[prompt.label]{tr(DEFAULT_UI_LANGUAGE, 'language.prompt')}[/] "
+        f"{tr(DEFAULT_UI_LANGUAGE, 'language.choices')}",
+        console=console,
+        choices=["en", "pt"],
+        default="pt" if normalize_language(default_language) == "pt-BR" else "en",
+    )
+    return normalize_language(answer)
 
 # ──────────────────────────────────────────────────────────────────
 # Tax Constants for 2026
@@ -250,6 +606,7 @@ def load_state() -> dict[str, Any]:
         - num_dependents (int): e.g. 2 (optional, defaults to 0 if missing)
         - pgbl_contribution (float): e.g. 500.0 (optional, defaults to 0.0)
         - alimony (float): e.g. 1000.0 (optional, defaults to 0.0)
+        - language (str): "en" or "pt-BR" (optional, defaults to English)
 
     If the file doesn't exist, is corrupted, or has an unexpected
     format, returns an empty dict so the app falls back to fresh
@@ -279,6 +636,7 @@ def save_state(
     num_dependents: int = 0,
     pgbl_contribution: float = 0.0,
     alimony: float = 0.0,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
 ) -> None:
     """Save the current inputs to the persistent state file.
 
@@ -296,6 +654,7 @@ def save_state(
         num_dependents: Number of IRPF dependents.
         pgbl_contribution: PGBL pension contribution in BRL.
         alimony: Alimony (Pensão Alimentícia) amount in BRL.
+        language: Persisted UI language preference.
     """
     state = {
         "month_year": month_year,
@@ -304,6 +663,7 @@ def save_state(
         "num_dependents": num_dependents,
         "pgbl_contribution": pgbl_contribution,
         "alimony": alimony,
+        "language": normalize_language(language),
     }
     try:
         STATE_FILE.write_text(
@@ -356,15 +716,10 @@ class MonthYearPrompt(Prompt):
         """
         value = value.strip()
         if not re.match(r"^\d{2}/\d{4}$", value):
-            raise InvalidResponse(
-                "[status.danger]  ✗ Please enter a valid month/year "
-                "(format: MM/YYYY, e.g. 03/2026).[/]"
-            )
+            raise InvalidResponse(tr(get_active_language(), "errors.invalid_month_year"))
         month = int(value[:2])
         if not 1 <= month <= 12:
-            raise InvalidResponse(
-                "[status.danger]  ✗ Month must be between 01 and 12.[/]"
-            )
+            raise InvalidResponse(tr(get_active_language(), "errors.invalid_month"))
         return value
 
 
@@ -391,12 +746,10 @@ class PositiveFloatPrompt(FloatPrompt):
             result = float(value)
         except ValueError as exc:
             raise InvalidResponse(
-                "[status.danger]  ✗ Please enter a valid number.[/]"
+                tr(get_active_language(), "errors.invalid_number")
             ) from exc
         if not math.isfinite(result) or result <= 0:
-            raise InvalidResponse(
-                "[status.danger]  ✗ Value must be a finite number greater than zero.[/]"
-            )
+            raise InvalidResponse(tr(get_active_language(), "errors.invalid_positive"))
         return result
 
 
@@ -423,11 +776,9 @@ class NonNegativeIntPrompt(Prompt):
         try:
             result = int(value)
         except ValueError as exc:
-            raise InvalidResponse(
-                "[status.danger]  ✗ Please enter a whole number (0 or above).[/]"
-            ) from exc
+            raise InvalidResponse(tr(get_active_language(), "errors.invalid_int")) from exc
         if result < 0:
-            raise InvalidResponse("[status.danger]  ✗ Value cannot be negative.[/]")
+            raise InvalidResponse(tr(get_active_language(), "errors.negative"))
         return result
 
 
@@ -455,11 +806,11 @@ class NonNegativeFloatPrompt(FloatPrompt):
             result = float(value)
         except ValueError as exc:
             raise InvalidResponse(
-                "[status.danger]  ✗ Please enter a valid number.[/]"
+                tr(get_active_language(), "errors.invalid_number")
             ) from exc
         if not math.isfinite(result) or result < 0:
             raise InvalidResponse(
-                "[status.danger]  ✗ Value must be a finite, non-negative number.[/]"
+                tr(get_active_language(), "errors.invalid_non_negative")
             )
         return result
 
@@ -580,7 +931,11 @@ def format_pct(value: float) -> str:
 # ──────────────────────────────────────────────────────────────────
 
 
-def render_breakdown_bar(results: "TaxCalculationResult", width: int = 44) -> Text:
+def render_breakdown_bar(
+    results: "TaxCalculationResult",
+    width: int = 44,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
+) -> Text:
     """Render a proportional stacked bar showing how revenue is split.
 
     Uses Unicode block characters (█) to create a stacked horizontal
@@ -602,7 +957,7 @@ def render_breakdown_bar(results: "TaxCalculationResult", width: int = 44) -> Te
     """
     gross = results.gross_revenue_brl
     if gross <= 0:
-        return Text("  (No revenue to display)", style="label.dim")
+        return Text(tr(language, "bar.none"), style="label.dim")
 
     # Segment definitions: (value, color, label)
     irpf = results.irpf_tax
@@ -617,23 +972,23 @@ def render_breakdown_bar(results: "TaxCalculationResult", width: int = 44) -> Te
         # Show costs as proportion of total cost (not revenue)
         total_cost = pro_labore_net + inss + irpf + das
         segments = [
-            (pro_labore_net, "#f4a261", "Salary"),
+            (pro_labore_net, "#f4a261", tr(language, "bar.salary")),
             (inss, "#e76f51", "INSS"),
         ]
         if irpf > 0:
             segments.append((irpf, "#c1121f", "IRPF"))
         segments.append((das, "#e63946", "DAS"))
         denominator = total_cost
-        suffix = " of costs"
+        suffix = tr(language, "bar.costs")
     else:
         segments = [
-            (pro_labore_net, "#f4a261", "Salary"),
+            (pro_labore_net, "#f4a261", tr(language, "bar.salary")),
             (inss, "#e76f51", "INSS"),
         ]
         if irpf > 0:
             segments.append((irpf, "#c1121f", "IRPF"))
         segments.append((das, "#e63946", "DAS"))
-        segments.append((remaining, "#2ec4b6", "Yours"))
+        segments.append((remaining, "#2ec4b6", tr(language, "bar.yours")))
         denominator = gross
         suffix = ""
 
@@ -706,6 +1061,7 @@ def calculate_taxes(
     num_dependents: int = 0,
     pgbl_contribution: float = 0.0,
     alimony: float = 0.0,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
 ) -> TaxCalculationResult:
     """Calculate all tax components for a given monthly revenue.
 
@@ -761,10 +1117,10 @@ def calculate_taxes(
     )
 
     if IRPF_SIMPLIFIED_DEDUCTION > legal_deduction_total:
-        irpf_deduction_model = "Simplified"
+        irpf_deduction_model = tr(language, "irpf.mode.simplified")
         irpf_deduction_total = IRPF_SIMPLIFIED_DEDUCTION
     else:
-        irpf_deduction_model = "Legal"
+        irpf_deduction_model = tr(language, "irpf.mode.legal")
         irpf_deduction_total = legal_deduction_total
 
     taxable_base = max(ideal_pro_labore - irpf_deduction_total, 0.0)
@@ -776,9 +1132,9 @@ def calculate_taxes(
 
     # IRPF status label for display
     if final_irpf == 0.0:
-        irpf_status: str = "✅ Tax Free"
+        irpf_status: str = tr(language, "irpf.tax_free")
     else:
-        irpf_status = f"⚠️  IRPF: {format_brl(final_irpf)}"
+        irpf_status = tr(language, "irpf.status", amount=format_brl(final_irpf))
 
     # Step 6b: Bracket 1 ceiling warning
     # The hardcoded DAS rate assumes annual revenue <= R$ 180.000,00.
@@ -786,10 +1142,11 @@ def calculate_taxes(
     bracket_1_ceiling: float = 180_000.00
     estimated_annual: float = gross_revenue_brl * 12
     if estimated_annual > bracket_1_ceiling:
-        bracket_warning: str = (
-            f"⚠️  Estimated annual revenue ({format_brl(estimated_annual)}) "
-            f"exceeds Bracket 1 ceiling ({format_brl(bracket_1_ceiling)}). "
-            "The effective DAS rate may be higher — consult your accountant."
+        bracket_warning: str = tr(
+            language,
+            "warning.bracket",
+            annual=format_brl(estimated_annual),
+            ceiling=format_brl(bracket_1_ceiling),
         )
     else:
         bracket_warning = ""
@@ -843,7 +1200,10 @@ def calculate_taxes(
 # ──────────────────────────────────────────────────────────────────
 
 
-def display_header(console: Console) -> None:
+def display_header(
+    console: Console,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
+) -> None:
     """Print the visually attractive branded RCal header.
 
     Renders the ASCII art logo centered with brand colors, followed
@@ -855,15 +1215,10 @@ def display_header(console: Console) -> None:
     console.print()
     console.print(Align.center(Text(LOGO, style="brand")))
     console.print()
-    console.print(
-        Align.center(Text("Simples Nacional Tax Calculator", style="heading"))
-    )
+    console.print(Align.center(Text(tr(language, "header.title"), style="heading")))
     console.print(
         Align.center(
-            Text(
-                "Anexo III  ·  Fator R  ·  Export Exemptions",
-                style="label.dim",
-            )
+            Text(tr(language, "header.subtitle"), style="label.dim")
         )
     )
     console.print()
@@ -878,6 +1233,7 @@ def display_header(console: Console) -> None:
 
 def collect_inputs(
     console: Console,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
     prev_exchange_rate: float | None = None,
     saved_state: Mapping[str, Any] | None = None,
 ) -> tuple[str, float, float]:
@@ -909,7 +1265,7 @@ def collect_inputs(
     default_month_year = str(saved.get("month_year", datetime.now().strftime("%m/%Y")))
 
     month_year: str = MonthYearPrompt.ask(
-        "[prompt.label]📅 Current Month/Year[/] [prompt.hint](MM/YYYY)[/]",
+        tr(language, "input.month_year"),
         console=console,
         default=default_month_year,
     )
@@ -918,13 +1274,13 @@ def collect_inputs(
     saved_revenue = saved.get("revenue_usd")
     if saved_revenue is not None and prev_exchange_rate is None:
         revenue_usd: float = NonNegativeFloatPrompt.ask(
-            "[prompt.label]💵 Monthly Revenue in USD[/] [prompt.hint](0 = zero-revenue advisory)[/]",
+            tr(language, "input.revenue"),
             console=console,
             default=float(saved_revenue),
         )
     else:
         revenue_usd = NonNegativeFloatPrompt.ask(
-            "[prompt.label]💵 Monthly Revenue in USD[/] [prompt.hint](0 = zero-revenue advisory)[/]",
+            tr(language, "input.revenue"),
             console=console,
         )
 
@@ -936,13 +1292,13 @@ def collect_inputs(
 
     if default_rate is not None:
         exchange_rate: float = PositiveFloatPrompt.ask(
-            "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+            tr(language, "input.rate"),
             console=console,
             default=default_rate,
         )
     else:
         exchange_rate = PositiveFloatPrompt.ask(
-            "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+            tr(language, "input.rate"),
             console=console,
         )
 
@@ -951,6 +1307,7 @@ def collect_inputs(
 
 def collect_deductions(
     console: Console,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
     saved_state: Mapping[str, Any] | None = None,
 ) -> tuple[int, float, float]:
     """Collect optional IRPF deduction inputs with smart defaults.
@@ -988,10 +1345,10 @@ def collect_deductions(
     )
 
     console.print()
-    apply_deductions = Confirm.ask(
-        "[prompt.label]📝 Apply IRPF deductions?[/] "
-        "[prompt.hint](dependents, PGBL, alimony)[/]",
+    apply_deductions = ask_yes_no(
         console=console,
+        language=language,
+        prompt=tr(language, "input.apply_deductions"),
         default=has_saved_deductions,
     )
 
@@ -1004,8 +1361,8 @@ def collect_deductions(
     default_dep = int(saved_dependents) if saved_dependents else 0
     num_dependents: int = int(
         NonNegativeIntPrompt.ask(
-            "[prompt.label]👨‍👩‍👧 Number of Dependents[/] "
-            f"[prompt.hint](R$ {IRPF_DEPENDENT_DEDUCTION:,.2f}/each)[/]",
+            f"{tr(language, 'input.dependents')} "
+            f"{tr(language, 'input.dependents_hint', amount=IRPF_DEPENDENT_DEDUCTION)}",
             console=console,
             default=default_dep,
         )
@@ -1014,8 +1371,7 @@ def collect_deductions(
     # ── PGBL contribution ────────────────────────────────────────
     default_pgbl = float(saved_pgbl) if saved_pgbl else 0.0
     pgbl_contribution: float = NonNegativeFloatPrompt.ask(
-        "[prompt.label]🏦 PGBL Contribution (BRL)[/] "
-        "[prompt.hint](capped at 12% of Pró-labore)[/]",
+        f"{tr(language, 'input.pgbl')} {tr(language, 'input.pgbl_hint')}",
         console=console,
         default=default_pgbl,
     )
@@ -1023,7 +1379,7 @@ def collect_deductions(
     # ── Alimony ──────────────────────────────────────────────────
     default_alimony = float(saved_alimony) if saved_alimony else 0.0
     alimony: float = NonNegativeFloatPrompt.ask(
-        "[prompt.label]⚖️  Alimony / Pensão Alimentícia (BRL)[/]",
+        tr(language, "input.alimony"),
         console=console,
         default=default_alimony,
     )
@@ -1047,6 +1403,7 @@ def display_results(
     revenue_usd: float,
     exchange_rate: float,
     results: TaxCalculationResult,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
 ) -> None:
     """Render calculation results in a 3-zone visual architecture.
 
@@ -1067,21 +1424,21 @@ def display_results(
     cards = [
         Panel(
             Align.center(Text(month_year, style="heading")),
-            title="[label]📅 Month[/]",
+            title=f"[label]{tr(language, 'cards.month')}[/]",
             border_style="border.dim",
             width=18,
             padding=(0, 1),
         ),
         Panel(
             Align.center(Text(f"US$ {revenue_usd:,.2f}", style="heading")),
-            title="[label]💵 Revenue[/]",
+            title=f"[label]{tr(language, 'cards.revenue')}[/]",
             border_style="border.dim",
             width=22,
             padding=(0, 1),
         ),
         Panel(
             Align.center(Text(f"R$ {exchange_rate:,.4f}", style="heading")),
-            title="[label]💱 Rate[/]",
+            title=f"[label]{tr(language, 'cards.rate')}[/]",
             border_style="border.dim",
             width=18,
             padding=(0, 1),
@@ -1100,35 +1457,39 @@ def display_results(
         min_width=58,
     )
 
-    table.add_column("📋 Item", style="label", min_width=28)
-    table.add_column("💰 Value", justify="right", min_width=20)
+    table.add_column(tr(language, "table.item"), style="label", min_width=28)
+    table.add_column(tr(language, "table.value"), justify="right", min_width=20)
 
     # ─ Revenue
     table.add_row(
-        "Gross Revenue (BRL)",
+        tr(language, "table.gross"),
         Text(format_brl(results.gross_revenue_brl), style="money.positive"),
     )
 
     # ─ Salary Strategy
     table.add_row(
-        Text("Fator R Minimum (28%)", style="label.dim"),
+        Text(tr(language, "table.fator_r"), style="label.dim"),
         Text(format_brl(results.fator_r_minimum), style="label.dim"),
     )
     table.add_row(
-        Text("✨ Ideal Pró-labore", style="money.highlight"),
+        Text(tr(language, "table.pro_labore"), style="money.highlight"),
         Text(format_brl(results.ideal_pro_labore), style="money.highlight"),
     )
 
     # ─ Deductions
     # Show INSS label with "capped" indicator when the ceiling is active
     inss_capped = results.ideal_pro_labore > INSS_CEILING
-    inss_label = "INSS (11%, capped)" if inss_capped else "INSS (11%)"
+    inss_label = (
+        tr(language, "table.inss_capped")
+        if inss_capped
+        else tr(language, "table.inss")
+    )
     table.add_row(
         inss_label,
         Text(f"- {format_brl(results.inss_tax)}", style="money.negative"),
     )
     table.add_row(
-        "DAS (Simples Nacional)",
+        tr(language, "table.das"),
         Text(
             f"- {format_brl(results.estimated_das)}",
             style="money.negative",
@@ -1139,11 +1500,11 @@ def display_results(
     irpf_tax = results.irpf_tax
     taxable_base = results.taxable_base
     table.add_row(
-        Text("IRPF Taxable Base", style="label.dim"),
+        Text(tr(language, "table.taxable_base"), style="label.dim"),
         Text(format_brl(taxable_base), style="label.dim"),
     )
     table.add_row(
-        Text("IRPF Deduction Mode", style="label.dim"),
+        Text(tr(language, "table.deduction_mode"), style="label.dim"),
         Text(
             f"{results.irpf_deduction_model} ({format_brl(results.irpf_deduction_total)})",
             style="label.dim",
@@ -1151,20 +1512,20 @@ def display_results(
     )
     if irpf_tax > 0:
         table.add_row(
-            "IRPF (Lei 15.270/2025)",
+            tr(language, "table.irpf"),
             Text(f"- {format_brl(irpf_tax)}", style="money.negative"),
         )
     else:
         table.add_row(
-            "IRPF Status",
-            Text("✅ Tax Free", style="status.ok"),
+            tr(language, "table.irpf_status"),
+            Text(tr(language, "irpf.tax_free"), style="status.ok"),
         )
 
     # ─ Bracket Warning (conditional)
     bracket_warn = str(results.bracket_warning)
     if bracket_warn:
         table.add_row(
-            "📈 Bracket Warning",
+            tr(language, "table.bracket_warning"),
             Text(bracket_warn, style="status.warn"),
         )
 
@@ -1172,7 +1533,7 @@ def display_results(
         Align.center(
             Panel(
                 table,
-                title="[heading]📊 Tax Breakdown[/]",
+                title=f"[heading]{tr(language, 'panel.breakdown')}[/]",
                 border_style="border.primary",
                 padding=(1, 1),
             )
@@ -1198,13 +1559,13 @@ def display_results(
     # Dividends row — style differs when negative
     div_style = "status.danger" if dividends < 0 else "money.positive"
     bottom_table.add_row(
-        Text("📦 Tax-Free Dividends", style="label"),
+        Text(tr(language, "bottom.dividends"), style="label"),
         Text(format_brl(dividends), style=div_style),
     )
 
     # Net take-home row (grand total)
     bottom_table.add_row(
-        Text("🏠 Net Take-Home", style="heading"),
+        Text(tr(language, "bottom.net"), style="heading"),
         Text(format_brl(net), style="money.total"),
     )
 
@@ -1213,94 +1574,33 @@ def display_results(
         total_taxes = results.inss_tax + results.estimated_das + results.irpf_tax
         tax_pct = total_taxes / gross
         bottom_table.add_row(
-            Text("📉 Effective Tax Burden", style="label"),
+            Text(tr(language, "bottom.burden"), style="label"),
             Text(format_pct(tax_pct), style="status.warn"),
         )
 
     # Revenue distribution breakdown bar
-    breakdown_bar = render_breakdown_bar(results)
+    breakdown_bar = render_breakdown_bar(results, language=language)
 
     # Compose the bottom-line content
     if dividends < 0:
         # ── Negative Dividends: Explicit Danger Panel ────────
         # Explains the problem and offers two actionable options
-        warning_content = Text.assemble(
-            ("⚠️  Revenue Too Low\n\n", "status.danger"),
-            (" Your monthly revenue (", "label"),
-            (format_brl(gross), "heading"),
-            (") is not enough to cover the\n", "label"),
-            (" minimum Pró-labore (", "label"),
-            (format_brl(results.ideal_pro_labore), "money.highlight"),
-            (") + DAS tax (", "label"),
-            (format_brl(results.estimated_das), "money.negative"),
-            (").\n\n", "label"),
-            (" Dividends are negative: ", "label"),
-            (format_brl(dividends), "status.danger"),
-            ("\n This means the company would need to ", "label"),
-            ("inject capital", "status.danger"),
-            (" to cover expenses.\n\n", "label"),
-            (" ━━━ What you can do ━━━\n\n", "status.warn"),
-            ("   ① ", "status.warn"),
-            ("Increase revenue", "heading"),
-            (" — Raise your monthly billing above ", "label"),
-            (
-                format_brl(results.ideal_pro_labore + results.estimated_das),
-                "money.highlight",
+        warning_content = Text(
+            tr(
+                language,
+                "warning.low_revenue",
+                gross=format_brl(gross),
+                pro_labore=format_brl(results.ideal_pro_labore),
+                das=format_brl(results.estimated_das),
+                dividends=format_brl(dividends),
+                target=format_brl(results.ideal_pro_labore + results.estimated_das),
+                minimum_wage=format_brl(LEGAL_MINIMUM_WAGE),
             ),
-            ("\n     to generate positive dividends.\n\n", "label"),
-            ("  ② ", "status.warn"),
-            ("Accept minimum wage salary", "heading"),
-            (" — At this revenue level the\n", "label"),
-            ("     Pró-labore is already at the legal minimum (", "label"),
-            (format_brl(LEGAL_MINIMUM_WAGE), "money.highlight"),
-            (
-                ").\n     The company must still cover DAS + INSS "
-                "from available funds.\n\n",
-                "label",
-            ),
-            ("━━━ SC / Florianópolis Reminders ━━━\n\n", "status.warn"),
-            ("  📌 ", ""),
-            ("PGDAS-D filing", "heading"),
-            (" — Required every month, even with\n", "label"),
-            ("     low revenue. Declare the actual amount.\n\n", "label.dim"),
-            ("  📌 ", ""),
-            ("TFF (municipal fee)", "heading"),
-            (" — Florianópolis charges a fixed\n", "label"),
-            ("     annual licensing fee regardless of revenue.", "label.dim"),
+            style="label",
         )
 
         if results.is_zero_revenue:
-            warning_content = Text.assemble(
-                ("⚠️  Zero Revenue Advisory\n\n", "status.warn"),
-                ("Your company generated no revenue this month.\n\n", "label"),
-                ("━━━ Brazilian Legal Guidelines ━━━\n\n", "heading"),
-                ("  📌 ", ""),
-                ("Pró-labore is Optional", "status.warn"),
-                (" — If the company is genuinely\n", "label"),
-                ("     inactive, you do ", "label"),
-                ("not", "status.danger"),
-                (" have to withdraw Pró-labore.\n", "label"),
-                (
-                    "     (This means no INSS cost, but no coverage either).\n\n",
-                    "label.dim",
-                ),
-                ("  📌 ", ""),
-                ("DAS is Zero", "status.warn"),
-                (" — Your Simples Nacional tax is legally R$ 0,00.\n\n", "label"),
-                ("  📌 ", ""),
-                ("PGDAS-D Filing", "status.warn"),
-                (" — You ", "label"),
-                ("MUST", "status.danger"),
-                (" still file your monthly\n", "label"),
-                (
-                    "     declaration informing zero revenue to avoid fines.\n\n",
-                    "label",
-                ),
-                ("  📌 ", ""),
-                ("TFF (Florianópolis)", "status.warn"),
-                (" — Annual municipal licensing fee\n", "label"),
-                ("     must still be paid regardless of revenue.\n", "label.dim"),
-            )
+            warning_content = Text(tr(language, "warning.zero_revenue"), style="label")
 
         bottom_content = Group(
             bottom_table,
@@ -1308,18 +1608,18 @@ def display_results(
             Panel(
                 warning_content,
                 border_style="status.danger",
-                title="[status.danger]⚠️  Action Required[/]",
+                title=f"[status.danger]{tr(language, 'panel.action_required')}[/]",
                 padding=(1, 2),
             ),
             Text(""),
-            Text("  Revenue Distribution", style="label"),
+            Text(tr(language, "bottom.revenue_distribution"), style="label"),
             breakdown_bar,
         )
     else:
         bottom_content = Group(
             bottom_table,
             Text(""),
-            Text("  Revenue Distribution", style="label"),
+            Text(tr(language, "bottom.revenue_distribution"), style="label"),
             breakdown_bar,
         )
 
@@ -1327,7 +1627,7 @@ def display_results(
         Align.center(
             Panel(
                 bottom_content,
-                title="[heading]💰 Your Bottom Line[/]",
+                title=f"[heading]{tr(language, 'panel.bottom_line')}[/]",
                 border_style="brand",
                 padding=(1, 2),
             )
@@ -1336,7 +1636,7 @@ def display_results(
     console.print()
 
     # ── Footer: Legal Context (structured, subdued) ──────────────
-    display_footer(console)
+    display_footer(console, language)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -1344,7 +1644,10 @@ def display_results(
 # ──────────────────────────────────────────────────────────────────
 
 
-def display_footer(console: Console) -> None:
+def display_footer(
+    console: Console,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
+) -> None:
     """Print the legal context footer as structured Rule-separated sections.
 
     Each section is visually distinct but clearly secondary to the
@@ -1353,37 +1656,23 @@ def display_footer(console: Console) -> None:
     Args:
         console: Rich console instance for output.
     """
-    console.print(Rule(title="💡 Strategy", style="border.dim"))
+    console.print(Rule(title=tr(language, "footer.strategy.title"), style="border.dim"))
     console.print(
-        Text(
-            "  Paying ≥28% of gross as salary keeps you in Anexo III (~6%) "
-            "instead of Anexo V (~15.5%).\n"
-            "  The ideal Pró-labore is the minimum needed to maintain this "
-            "threshold while respecting the legal minimum wage.",
-            style="label.dim",
-        )
+        Text(tr(language, "footer.strategy.body"), style="label.dim")
     )
     console.print()
 
-    console.print(Rule(title="💱 Exchange Rate", style="border.dim"))
+    console.print(Rule(title=tr(language, "footer.rate.title"), style="border.dim"))
     console.print(
-        Text(
-            "  Use the BRL rate on the date the funds are made available or "
-            "the invoice is issued — not the withdrawal date.",
-            style="label.dim",
-        )
+        Text(tr(language, "footer.rate.body"), style="label.dim")
     )
     console.print()
 
-    console.print(Rule(title="⚖️  Disclaimer", style="border.dim"))
     console.print(
-        Text(
-            "  Estimates for planning purposes only. PGDAS-D and DAS filings still "
-            "depend on rolling 12-month revenue, payroll history, and municipal "
-            "licensing facts. Always consult a qualified Brazilian accountant "
-            "(contador) for official filings.",
-            style="label.dim",
-        )
+        Rule(title=tr(language, "footer.disclaimer.title"), style="border.dim")
+    )
+    console.print(
+        Text(tr(language, "footer.disclaimer.body"), style="label.dim")
     )
     console.print()
 
@@ -1402,7 +1691,10 @@ def display_footer(console: Console) -> None:
 # ──────────────────────────────────────────────────────────────────
 
 
-def prompt_next_action(console: Console) -> str | None:
+def prompt_next_action(
+    console: Console,
+    language: AppLanguage = DEFAULT_UI_LANGUAGE,
+) -> str | None:
     """Ask the user what they want to do next after a calculation.
 
     Returns:
@@ -1414,32 +1706,38 @@ def prompt_next_action(console: Console) -> str | None:
     console.print(Rule(style="border.dim"))
     console.print()
 
-    if not Confirm.ask(
-        "[prompt.label]🔄 Calculate another month?[/]",
+    if not ask_yes_no(
         console=console,
+        language=language,
+        prompt=tr(language, "loop.continue"),
         default=True,
     ):
         return None
 
     console.print()
-    console.print(Text("  What would you like to change?", style="heading"))
+    console.print(Text(tr(language, "loop.title"), style="heading"))
     console.print()
-    console.print(Text("  [1]  All inputs (month, revenue, rate)", style="label"))
-    console.print(Text("  [2]  Only revenue (keep current rate)", style="label"))
-    console.print(
-        Text("  [3]  Only exchange rate (keep current revenue)", style="label")
-    )
-    console.print(Text("  [4]  🗑️  Clear memory (wipe saved state)", style="label.dim"))
+    console.print(Text(tr(language, "loop.all"), style="label"))
+    console.print(Text(tr(language, "loop.revenue"), style="label"))
+    console.print(Text(tr(language, "loop.rate"), style="label"))
+    console.print(Text(tr(language, "loop.clear"), style="label.dim"))
+    console.print(Text(tr(language, "loop.language"), style="label"))
     console.print()
 
     choice = Prompt.ask(
-        "[prompt.label]  Your choice[/]",
+        tr(language, "loop.choice"),
         console=console,
-        choices=["1", "2", "3", "4"],
+        choices=["1", "2", "3", "4", "5"],
         default="1",
     )
 
-    return {"1": "all", "2": "revenue", "3": "rate", "4": "clear"}[choice]
+    return {
+        "1": "all",
+        "2": "revenue",
+        "3": "rate",
+        "4": "clear",
+        "5": "language",
+    }[choice]
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -1463,6 +1761,10 @@ def main() -> None:
 
     # ── Load cross-session state ────────────────────────────────
     saved_state = load_state()
+    ui_language = normalize_language(saved_state.get("language"))
+    if "language" not in saved_state:
+        ui_language = prompt_language(console, ui_language)
+    set_active_language(ui_language)
 
     # State carried between loop iterations
     prev_month_year: str | None = None
@@ -1474,32 +1776,28 @@ def main() -> None:
 
     try:
         # ── Header ──────────────────────────────────────────────
-        display_header(console)
+        display_header(console, ui_language)
 
         # Show saved state indicator if available
         if saved_state:
             console.print(
-                Text(
-                    "  💾 Previous session restored — "
-                    "your last values are pre-filled as defaults.",
-                    style="label.dim",
-                )
+                Text(tr(ui_language, "state.restored"), style="label.dim")
             )
             console.print()
 
         # ── First Run: Collect all inputs ───────────────────────
         month_year, revenue_usd, exchange_rate = collect_inputs(
-            console, saved_state=saved_state
+            console, ui_language, saved_state=saved_state
         )
         num_dependents, pgbl, alimony_val = collect_deductions(
-            console, saved_state=saved_state
+            console, ui_language, saved_state=saved_state
         )
 
         while True:
             # ── Calculation with tactile spinner feedback ────────
             console.print()
             with console.status(
-                "[brand]  Calculating…[/]",
+                tr(ui_language, "spinner.calculating"),
                 spinner="dots",
                 spinner_style="brand",
             ):
@@ -1509,11 +1807,19 @@ def main() -> None:
                     num_dependents=num_dependents,
                     pgbl_contribution=pgbl,
                     alimony=alimony_val,
+                    language=ui_language,
                 )
                 time.sleep(0.35)
 
             # ── Display Results ─────────────────────────────────
-            display_results(console, month_year, revenue_usd, exchange_rate, results)
+            display_results(
+                console,
+                month_year,
+                revenue_usd,
+                exchange_rate,
+                results,
+                ui_language,
+            )
 
             # ── Persist state to disk ───────────────────────────
             save_state(
@@ -1523,6 +1829,7 @@ def main() -> None:
                 num_dependents=num_dependents,
                 pgbl_contribution=pgbl,
                 alimony=alimony_val,
+                language=ui_language,
             )
 
             # ── Remember state for next iteration ───────────────
@@ -1534,7 +1841,7 @@ def main() -> None:
             prev_alimony = alimony_val
 
             # ── Ask what to do next ─────────────────────────────
-            action = prompt_next_action(console)
+            action = prompt_next_action(console, ui_language)
             if action is None:
                 break
 
@@ -1545,7 +1852,9 @@ def main() -> None:
             if action == "all":
                 # Re-enter everything (rate pre-filled from last run)
                 month_year, revenue_usd, exchange_rate = collect_inputs(
-                    console, prev_exchange_rate=prev_exchange_rate
+                    console,
+                    ui_language,
+                    prev_exchange_rate=prev_exchange_rate,
                 )
                 # Build a synthetic state dict so deduction defaults carry over
                 deduction_state = {
@@ -1554,21 +1863,25 @@ def main() -> None:
                     "alimony": prev_alimony,
                 }
                 num_dependents, pgbl, alimony_val = collect_deductions(
-                    console, saved_state=deduction_state
+                    console, ui_language, saved_state=deduction_state
                 )
 
             elif action == "revenue":
                 # Only change revenue — keep month + rate
                 console.print(
                     Text(
-                        f"  Keeping: 📅 {prev_month_year}  ·  "
-                        f"💱 R$ {prev_exchange_rate:,.4f}",
+                        tr(
+                            ui_language,
+                            "loop.keep_rate",
+                            month_year=prev_month_year,
+                            rate=prev_exchange_rate,
+                        ),
                         style="label.dim",
                     )
                 )
                 console.print()
                 revenue_usd = NonNegativeFloatPrompt.ask(
-                    "[prompt.label]💵 Monthly Revenue in USD[/] [prompt.hint](0 = zero-revenue advisory)[/]",
+                    tr(ui_language, "input.revenue"),
                     console=console,
                 )
                 month_year = prev_month_year  # type: ignore[assignment]
@@ -1580,21 +1893,25 @@ def main() -> None:
                     "alimony": prev_alimony,
                 }
                 num_dependents, pgbl, alimony_val = collect_deductions(
-                    console, saved_state=deduction_state
+                    console, ui_language, saved_state=deduction_state
                 )
 
             elif action == "rate":
                 # Only change exchange rate — keep month + revenue
                 console.print(
                     Text(
-                        f"  Keeping: 📅 {prev_month_year}  ·  "
-                        f"💵 US$ {prev_revenue_usd:,.2f}",
+                        tr(
+                            ui_language,
+                            "loop.keep_revenue",
+                            month_year=prev_month_year,
+                            revenue=prev_revenue_usd,
+                        ),
                         style="label.dim",
                     )
                 )
                 console.print()
                 exchange_rate = PositiveFloatPrompt.ask(
-                    "[prompt.label]💱 USD → BRL Exchange Rate[/]",
+                    tr(ui_language, "input.rate"),
                     console=console,
                     default=prev_exchange_rate,
                 )
@@ -1607,39 +1924,41 @@ def main() -> None:
                     "alimony": prev_alimony,
                 }
                 num_dependents, pgbl, alimony_val = collect_deductions(
-                    console, saved_state=deduction_state
+                    console, ui_language, saved_state=deduction_state
                 )
 
             elif action == "clear":
                 # Wipe saved state from disk
                 if clear_state():
-                    console.print(
-                        Text(
-                            "  🗑️  Memory cleared! Saved state wiped.",
-                            style="status.ok",
-                        )
-                    )
+                    console.print(Text(tr(ui_language, "state.cleared"), style="status.ok"))
                 else:
-                    console.print(
-                        Text(
-                            "  ℹ️  No saved state to clear.",
-                            style="label.dim",
-                        )
-                    )
+                    console.print(Text(tr(ui_language, "state.empty"), style="label.dim"))
                 console.print()
                 # Re-enter all inputs from scratch (no defaults)
-                month_year, revenue_usd, exchange_rate = collect_inputs(console)
+                month_year, revenue_usd, exchange_rate = collect_inputs(
+                    console, ui_language
+                )
                 # No saved state → deductions default to no
-                num_dependents, pgbl, alimony_val = collect_deductions(console)
+                num_dependents, pgbl, alimony_val = collect_deductions(
+                    console, ui_language
+                )
+
+            elif action == "language":
+                ui_language = prompt_language(console, ui_language)
+                set_active_language(ui_language)
+                console.print(Text(tr(ui_language, "language.changed"), style="status.ok"))
+                display_header(console, ui_language)
 
         # ── Goodbye ─────────────────────────────────────────────
         console.print()
-        console.print(Rule(title="👋 Obrigado!", style="brand"))
+        console.print(Rule(title=tr(ui_language, "goodbye.normal"), style="brand"))
         console.print()
 
     except KeyboardInterrupt:
         console.print("\n")
-        console.print(Rule(title="👋 Até logo!", style="border.dim"))
+        console.print(
+            Rule(title=tr(get_active_language(), "goodbye.interrupt"), style="border.dim")
+        )
         console.print()
 
 
