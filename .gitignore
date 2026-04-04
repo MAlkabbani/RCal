@@ -1,16 +1,56 @@
-# Local Python environment
+# Python virtual environments
 .venv/
+venv/
+.Python
 
-# Tooling caches and reports
-.coverage
-.mypy_cache/
+# Python bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py,cover
+
+# Python tooling caches
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.pytype/
+.pyre/
+.dmypy.json
+dmypy.json
 
-# Packaging outputs
+# Coverage / test outputs
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.benchmarks/
+
+# Packaging / build artifacts
+build/
 dist/
-src/rcal.egg-info/
+pip-wheel-metadata/
+*.egg-info/
+*.whl
+
+# OS / editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+
+# VS Code: ignore local workspace state but keep shareable project settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 
 # Local project archives and recovery outputs
 backups/
-scripts/backups/
 local_archive/
+archive/
+
+# Legacy local docs
+PRD.md
